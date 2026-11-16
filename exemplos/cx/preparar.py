@@ -154,6 +154,15 @@ chat = canal[canal["grupo"] == "Chat"]
 chat_low = bool(len(chat) and chat["sig"].iloc[0] and chat["v"].iloc[0] < chat["rest"].iloc[0])
 title = f"Pulsar Fibra: a satisfação {trend}" + (", mas o chat ainda fica para trás" if chat_low else "")
 spec = {
+    # Passo 0 (SKILL.md): answers approved in the proposal; shown in the footer because exibir is true
+    "contexto": {
+        "objetivo": "Saber se a satisfação melhorou e quais canais e motivos puxam a nota para baixo",
+        "publico": "Time de atendimento e liderança de CX",
+        "pontos_chave": ["Chat ainda abaixo dos outros canais?", "O que os detratores mais citam"],
+        "linguagem": {"idioma": "pt-BR", "tom": "direto", "nivel": "técnico moderado"},
+        "periodo": "Últimos 12 meses vs. os 12 anteriores",
+        "exibir": True,
+    },
     "meta": {
         "title": title,
         "kicker": "Pesquisa pós-atendimento · CSAT, CES e NPS",

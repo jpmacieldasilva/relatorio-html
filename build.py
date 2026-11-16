@@ -110,6 +110,10 @@ def load_profile_module():
 # --------------------------------------------------------------------------- #
 # Validation                                                                  #
 # --------------------------------------------------------------------------- #
+# Step-0 briefing answers, stored so copy and section order can be traced back to them (see SKILL.md, Passo 0)
+CONTEXT_KEYS = {"objetivo", "publico", "pontos_chave", "linguagem", "periodo", "recorte", "suposicoes", "exibir", "aprovado"}
+
+
 def validate(spec: dict) -> list[str]:
     """Return a list of problems (empty = OK). Fatal issues raise ValueError."""
     problems: list[str] = []
@@ -124,6 +128,20 @@ def validate(spec: dict) -> list[str]:
     else:
         keys = set(data[0].keys()) if data else set()
 
+    ctx = spec.get("contexto")
+    if ctx is not None:
+        if not isinstance(ctx, dict):
+            problems.append("contexto must be a dict: {objetivo, publico, pontos_chave, linguagem, periodo, recorte, suposicoes, exibir}")
+        else:
+            for k, v in ctx.items():
+                if k not in CONTEXT_KEYS:
+                    problems.append(f"contexto.{k}: unknown key (valid: {sorted(CONTEXT_KEYS)})")
+                elif k == "exibir" and not isinstance(v, bool):
+                    problems.append("contexto.exibir must be true/false")
+                elif k in ("pontos_chave", "suposicoes") and not isinstance(v, (str, list)):
+                    problems.append(f"contexto.{k} must be a string or a list of strings")
+                elif k == "linguagem" and not isinstance(v, (str, dict)):
+                    problems.append("contexto.linguagem must be a string or {idioma, tom, nivel}")
     date = fields.get("date")
     if date and date not in keys:
         problems.append(f"fields.date '{date}' not in data columns")

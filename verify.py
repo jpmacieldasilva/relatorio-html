@@ -222,6 +222,13 @@ def main():
         ok(dl.value.suggested_filename.endswith(".csv"), f"CSV download ({dl.value.suggested_filename})")
         ok(bool(n_before), f"pager: {n_before}")
 
+        # 5b) Passo 0 context: the "about" column appears only when contexto.exibir is true
+        ctxs = page.evaluate("window.__report.contexto")
+        if ctxs is not None:
+            want = bool(ctxs.get("exibir"))
+            ok((page.locator("#method .about").count() > 0) == want,
+               f"contexto in footer {'shown' if want else 'hidden'} (exibir: {str(want).lower()})")
+
         # 6) theme toggle → dark
         page.evaluate("window.scrollTo(0,0)")
         page.locator("#btn-theme").click()

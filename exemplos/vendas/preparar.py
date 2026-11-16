@@ -144,6 +144,15 @@ ch_title = f"{fast_ch} cresce mais rápido que os outros canais"
 
 # ---------------------------------------------------------------- 5. spec + build
 spec = {
+    # Passo 0 (SKILL.md): answers approved in the proposal; drive copy and section order
+    "contexto": {
+        "objetivo": "Decidir onde investir e onde cortar desconto no próximo trimestre",
+        "publico": "Diretoria comercial; leitura rápida, pouco técnica",
+        "pontos_chave": ["Crescimento por região", "Margem perdida com desconto", "Canal que mais cresce"],
+        "linguagem": {"idioma": "pt-BR", "tom": "direto", "nivel": "leigo"},
+        "periodo": "Últimos 12 meses vs. os 12 anteriores",
+        "exibir": False,
+    },
     "meta": {
         "title": title,
         "kicker": "Relatório de vendas · Omnichannel",

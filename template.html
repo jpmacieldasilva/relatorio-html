@@ -734,6 +734,7 @@ const T = Object.assign(PT ? {
   csvView: "CSV da tabela", csvRaw: "CSV dos dados filtrados", noGroup: "Sem agrupamento (linhas)", groupBy: "Agrupar por",
   showing: "Mostrando", prev: "Anterior", next: "Próxima", empty: "Sem dados para os filtros atuais.", pp: "p.p.",
   tableKicker: "Dados", tableTitle: "Explore os números", tableQ: "Busque, ordene e baixe exatamente o recorte filtrado.",
+  aboutTitle: "Sobre este relatório", goal: "Objetivo", audience: "Público", keyPoints: "Pontos-chave", assumptions: "Suposições",
   methodTitle: "Metodologia e qualidade dos dados", source: "Fonte", period: "Período", generated: "Gerado em",
   clickHint: "Clique para filtrar · Shift+clique soma à seleção", current: "Atual", peak: "Pico", filtersPrint: "Filtros aplicados",
   noFilters: "nenhum (todos os dados)", definitions: "Definições", cleaning: "Tratamento", quality: "Qualidade e limites", scope: "Destaques calculados sobre",
@@ -754,6 +755,7 @@ const T = Object.assign(PT ? {
   csvView: "Table CSV", csvRaw: "Filtered data CSV", noGroup: "No grouping (rows)", groupBy: "Group by",
   showing: "Showing", prev: "Previous", next: "Next", empty: "No data for the current filters.", pp: "pp",
   tableKicker: "Data", tableTitle: "Explore the numbers", tableQ: "Search, sort and download exactly the filtered slice.",
+  aboutTitle: "About this report", goal: "Goal", audience: "Audience", keyPoints: "Key points", assumptions: "Assumptions",
   methodTitle: "Methodology and data quality", source: "Source", period: "Period", generated: "Generated",
   clickHint: "Click to filter · Shift+click to add", current: "Current", peak: "Peak", filtersPrint: "Applied filters",
   noFilters: "none (all data)", definitions: "Definitions", cleaning: "Cleaning", quality: "Quality and limits", scope: "Highlights computed over",
@@ -1844,8 +1846,17 @@ function scaffold() {
   const M = R.methodology || {};
   const defs = (F.measures || []).filter(m => m.description).map(m => `<dt>${esc(m.label)}</dt><dd>${md(m.description)}</dd>`).join("");
   const list = a => `<ul>${a.map(x => `<li>${md(x)}</li>`).join("")}</ul>`;
+  // optional "about" column from spec.contexto (shown only with contexto.exibir: true)
+  const CX = R.contexto || {}, arr = v => v == null ? [] : Array.isArray(v) ? v : [v];
+  const about = CX.exibir ? [
+    CX.objetivo ? `<dt>${esc(T.goal)}</dt><dd>${md(CX.objetivo)}</dd>` : "",
+    CX.publico ? `<dt>${esc(T.audience)}</dt><dd>${md(CX.publico)}</dd>` : "",
+    arr(CX.pontos_chave).length ? `<dt>${esc(T.keyPoints)}</dt><dd>${arr(CX.pontos_chave).map(md).join("; ")}</dd>` : "",
+    arr(CX.suposicoes).length ? `<dt>${esc(T.assumptions)}</dt><dd>${arr(CX.suposicoes).map(md).join("; ")}</dd>` : "",
+  ].join("") : "";
   $("#method .g").innerHTML = `<p class="kicker">${esc(M.kicker || T.methodTitle)}</p>
     <div class="cols">
+      ${about ? `<div class="rv about"><h4>${esc(T.aboutTitle)}</h4><dl>${about}</dl></div>` : ""}
       ${defs ? `<div class="rv"><h4>${esc(T.definitions)}</h4><dl>${defs}</dl></div>` : ""}
       ${M.cleaning?.length ? `<div class="rv"><h4>${esc(T.cleaning)}</h4>${list(M.cleaning)}</div>` : ""}
       ${M.quality?.length ? `<div class="rv"><h4>${esc(T.quality)}</h4>${list(M.quality)}</div>` : ""}
@@ -2279,7 +2290,7 @@ function drawArt() {
 }
 
 // used by verify.py; also handy in the devtools console
-window.__report = { checks: R.checks || null, stat: k => stat(ROWS, MEAS[k]), statFiltered: k => stat(filterRows(), MEAS[k]), setCats, toggleCat, reset, setRange: (a, b) => setRange([parseDate(a), parseDate(b)]), preset: p => setRange(presetRange(p), p), revealAll, state: null, ready: false };
+window.__report = { checks: R.checks || null, contexto: R.contexto || null, stat: k => stat(ROWS, MEAS[k]), statFiltered: k => stat(filterRows(), MEAS[k]), setCats, toggleCat, reset, setRange: (a, b) => setRange([parseDate(a), parseDate(b)]), preset: p => setRange(presetRange(p), p), revealAll, state: null, ready: false };
 
 /* Print: always light, every reveal in its final state, charts re-rendered at A4 content width (~720 px) */
 let printTheme = null;

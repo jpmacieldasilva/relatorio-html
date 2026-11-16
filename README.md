@@ -55,6 +55,31 @@ O mesmo relatório de vendas no preset `corporativo`:
 
 ![Tema corporativo](docs/tema-corporativo-hero.png)
 
+## Como funciona
+
+1. **Contextualização (passo 0, obrigatório).** Antes de gerar qualquer coisa, o agente pergunta só o que não dá para inferir:
+   - o **objetivo**, isto é, que decisão o relatório vai apoiar;
+   - o **público** (diretoria, time, cliente) e o nível técnico;
+   - os **pontos-chave** ou hipóteses que a pessoa quer ver;
+   - o **período** e o recorte.
+
+   Em seguida, roda o perfil dos dados e devolve uma **proposta curta** para aprovação: filtros (colunas do cross-filter), linguagem e tom, seções na ordem de leitura (com a pergunta que cada uma responde e o gráfico previsto), KPIs, métricas de CX quando for pesquisa (CSAT, CES, NPS), tema e suposições. Nada é construído antes do "ok". Quem preferir pode dizer "segue", e o agente usa a proposta e registra as suposições.
+2. **Modelagem.** As respostas ficam em `spec["contexto"]` e orientam o resto. O título responde ao objetivo, o texto segue o público e cada ponto-chave vira um destaque ou uma seção. Com `"exibir": true`, objetivo, público e pontos-chave aparecem numa coluna discreta no rodapé.
+3. **Narrativa e build.** Os destaques são calculados em pandas e o `build.py` gera um único HTML.
+4. **Verificação.** O `verify.py` testa o relatório num Chromium headless e tira os screenshots antes da entrega.
+
+```python
+spec["contexto"] = {
+    "objetivo": "Decidir onde investir e onde cortar desconto no próximo trimestre",
+    "publico": "Diretoria comercial; leitura rápida, pouco técnica",
+    "pontos_chave": ["Crescimento por região", "Margem perdida com desconto"],
+    "linguagem": {"idioma": "pt-BR", "tom": "direto", "nivel": "leigo"},
+    "periodo": "Últimos 12 meses vs. os 12 anteriores",
+    "suposicoes": ["Pedidos cancelados ficam fora"],
+    "exibir": False,   # True = coluna "Sobre este relatório" no rodapé
+}
+```
+
 ## Começando
 
 ```bash
@@ -75,6 +100,7 @@ Os HTMLs já gerados estão em `exemplos/`. Basta abrir no navegador.
 
 ### Com os seus dados
 
+0. **Contexto.** Defina objetivo, público, pontos-chave e linguagem, e guarde em `spec["contexto"]` (veja *Como funciona*).
 1. **Perfil.** `python profile.py dados.xlsx --out perfil.json --clean-out limpo.parquet` lê CSV, XLSX, JSON, Parquet e SQLite e faz uma limpeza conservadora. O resultado mostra papéis das colunas, nulos, datas, outliers e alertas.
 2. **Spec.** Em Python, monte as medidas (taxas são sempre razão de somas), pré-agregue, calcule os destaques com pandas e escreva o spec. Copie a estrutura de `exemplos/vendas/preparar.py`. Para pesquisas, use `exemplos/cx/preparar.py` e `cx.py`.
 3. **Build.** `build.build(spec, "relatorio.html", theme="jornal")`, ou pela linha de comando: `python build.py spec.json relatorio.html --theme corporativo`.
@@ -95,8 +121,8 @@ rp, rb, cx = kit("profile"), kit("build"), kit("cx")
 
 A pasta inteira é uma *skill* no formato `SKILL.md` (Cursor, Claude Code e afins). Copie ou clone o repositório para a pasta de skills do agente, por exemplo `~/.cursor/skills/relatorio-html/` ou `~/.claude/skills/relatorio-html/`. O agente passa a:
 
-1. perfilar os dados;
-2. fazer um único cartão de briefing: público, decisão, métricas, período e marca (cores, fontes, logo), além do mapeamento das colunas quando for pesquisa;
+1. contextualizar: perguntar objetivo, público, pontos-chave e período, perfilar os dados e propor filtros, linguagem, seções, KPIs (e o mapeamento das colunas quando for pesquisa) e tema. Depois, esperar a aprovação;
+2. guardar o que foi aprovado em `spec["contexto"]`;
 3. modelar e calcular a narrativa em pandas, sem inventar números nem direções;
 4. gerar o relatório;
 5. rodar `verify.py` e revisar os screenshots antes de entregar.
@@ -163,5 +189,7 @@ The default theme, **Neutro**, is calm and neutral:
 - plain header, KPI cards and subtle fade/grow motion.
 
 Other presets: `corporativo` (navy block hero), `jornal` (serif, newspaper), `noturno` (dark, lime) and `destaque` (sun-yellow blocks, for presentations).
+
+How it works: **step 0 is a mandatory context pass.** The agent asks only what it can't infer: the goal (which decision the report supports), the audience and its technical level, the key points or hypotheses, and the period. It then profiles the data and sends a short proposal: filters, language and tone, sections (each with its question and chart), KPIs, CX metrics for surveys, theme and assumptions. It builds nothing until the user approves; "go ahead" skips the round and records the assumptions. The answers live in `spec["contexto"]` and steer the headline, the copy and the section order. `"exibir": true` shows them in a discreet footer column. After that come the pandas narrative, `build.py` and `verify.py`.
 
 Quick start: `pip install -r requirements.txt && python -m playwright install chromium`, then `python exemplos/vendas/preparar.py` and `python verify.py exemplos/vendas/relatorio.html`. The folder is also a drop-in **AI agent skill** (`SKILL.md`, paths relative to the skill folder). Docs are mostly in Portuguese (pt-BR). Code comments and `SKILL.md` are in English. MIT licensed; bundled third-party licenses are listed in `NOTICE.md`.

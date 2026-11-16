@@ -1,6 +1,6 @@
 ---
 name: relatorio-html
-description: Turn any dataset (CSV, XLSX, JSON, Parquet, SQLite/SQL dump, Sheets export) into a beautiful, interactive, single-file HTML report with editorial data viz — briefing questions, pandas profiling, computed insights, cross-filtering charts, data table, Playwright QA. Also CX survey reports (CSAT, CES, NPS) with confidence intervals, significance tests and comment themes. Fully themeable (fonts, colors, logo). Use when the user wants a report, dashboard, or "something better than Looker" from their data.
+description: Turn any dataset (CSV, XLSX, JSON, Parquet, SQLite/SQL dump, Sheets export) into a beautiful, interactive, single-file HTML report with editorial data viz — a mandatory context step (goal, audience, key points → proposal of filters, language and sections approved before building), pandas profiling, computed insights, cross-filtering charts, data table, Playwright QA. Also CX survey reports (CSAT, CES, NPS) with confidence intervals, significance tests and comment themes. Fully themeable (fonts, colors, logo). Use when the user wants a report, dashboard, or "something better than Looker" from their data.
 ---
 
 # Relatório HTML — editorial, interactive reports from any dataset
@@ -32,21 +32,69 @@ rp, rb, cx = kit("profile"), kit("build"), kit("cx")      # cx only for surveys
 ```
 Setup if missing: `pip install -r $KIT/requirements.txt && python3 -m playwright install chromium` (on externally-managed Pythons add `--user --break-system-packages`, or use a venv).
 
-## 1. Briefing — one question card, then go
+## 0. Contextualização — mandatory, before anything is built
 
-Profile the data first (step 2, it takes seconds), so the questions are informed and you can skip what the data already answers. Then ask at most 5 questions in one message or card, each with a proposed default:
+Nothing gets built (no `build.py`, no charts, no HTML) until the user has approved a short proposal. The step has three moves: ask, propose, wait.
 
-1. **Audience**: who reads this (board, team, client, just you)? This sets the tone and depth.
-2. **The decision or question** the report must answer ("where should we cut spend?", "is the launch working?").
-3. **Key metrics**: propose the measures you found, and say how each is computed (sum, ratio of sums).
-4. **Period and time grain**: propose the default window (e.g. last 12 months vs. the same period a year earlier) and the comparison mode.
-5. **Look / brand**: a preset (Neutro default, Corporativo, Jornal, Noturno, Destaque), the main brand color (hex), fonts (name of the Google/brand font, or "same as our site"), and the logo (file in the chat). Also light/dark/auto. Map the answers to `spec["theme"]` overrides with the table in `TEMA.md` (e.g. `{"primary": "#0057FF", "font": "Montserrat", "logo": "logo.svg"}`).
-6. **Survey data only**: show `cx.briefing(cx.detect(df))`, which maps CSAT / CES / NPS / date / comment columns with scale, threshold and confidence, and ask the user to confirm or correct it. This answer does not count toward the 5.
+**a) Ask a few questions, in one message or card, with options where possible.** Skip anything the conversation or the data already answers.
 
-Rules:
-- Skip any question the data or conversation already answers. Language: write in the user's language. A user writing Portuguese gets pt-BR copy and pt-BR number formatting (`R$ 1,2 mi`, `12,5%`, `1.234`), with no extra question.
-- If the user doesn't answer, or says "tanto faz" or "segue", proceed with your stated defaults and list them in the delivery message. Never block on the briefing.
-- Business rules hidden in the data (cancelled orders? refunds? test accounts? duplicate rows?) belong in the same card as "I'll assume X unless you say otherwise".
+1. **Objetivo**: which decision will this report support? Offer 2–3 options drawn from the data ("onde investir / cortar", "acompanhar a meta do mês", "explicar uma queda").
+2. **Público**: who reads it? Options: diretoria / executivo, time operacional, cliente externo, só você. Also ask how technical they are (leigo, intermediário, técnico).
+3. **Pontos-chave**: the questions, hypotheses or numbers they want to see ("o Nordeste caiu mesmo?", "o chat é pior que o telefone?"). This one is optional, and "nenhum, me surpreenda" is a valid answer.
+4. **Período e recorte**: propose a default window and comparison (e.g. last 12 months vs. the previous 12) plus any subset (a region, a product line, only paid orders).
+
+The language is inferred, not asked: a user writing Portuguese gets pt-BR copy and pt-BR number formatting (`R$ 1,2 mi`, `12,5%`, `1.234`). Business rules hidden in the data (cancelled orders? refunds? test accounts? duplicates?) go into the proposal as "vou assumir X, a menos que você diga o contrário".
+
+**b) Profile, then propose.** Run `profile.py` (step 2, it takes seconds), ideally before you send the questions so they are informed. From the profile and the answers, write one short **proposal** for approval covering:
+- **Filtros**: the columns for cross-filter (3–7 low/medium-cardinality dims) plus the date presets.
+- **Linguagem e tom**: formal or direto, técnico or leigo, and the language.
+- **Seções / capítulos**, in reading order. For each: the question it answers and the planned chart. Order the sections by the objetivo and pontos-chave, so the reader's main question comes first.
+- **KPIs**, with how each is computed (sum, ratio of sums). For surveys, the CX mapping from `cx.briefing(cx.detect(df))`: which column is CSAT / CES / NPS, its scale and threshold, plus the date and comment columns. Ask the user to confirm it.
+- **Tema**: a preset (Neutro default, Corporativo, Jornal, Noturno, Destaque) or the brand look (main hex color, font, logo; light/dark/auto). Map the answers with the table in `TEMA.md`.
+- **Suposições**: the defaults and business rules you assumed.
+
+**c) Wait.** End the turn after sending the proposal, then apply the approval or the changes the user asks for. A short "ok", "pode seguir" or "aprovado" is approval. If the user asks to skip ("pula", "faz do seu jeito", "tanto faz"), go ahead with the proposal as written. Record every assumption in `contexto.suposicoes` and list them in the delivery message. Never ask the same thing twice: one proposal round, plus one more only if the changes are big.
+
+**d) Store it in the spec.** Put the approved answers in `spec["contexto"]` and let them drive the build. The title and highlights should answer the objetivo, depth and vocabulary should follow público and linguagem, each pontos-chave item should be answered by an insight or a section (or explicitly marked as not supported by the data), and the section order should follow the proposal.
+```python
+spec["contexto"] = {
+  "objetivo": "Decidir onde investir e onde cortar desconto no próximo trimestre",
+  "publico": "Diretoria comercial; leitura rápida, pouco técnica",
+  "pontos_chave": ["Crescimento por região", "Margem perdida com desconto"],
+  "linguagem": {"idioma": "pt-BR", "tom": "direto", "nivel": "leigo"},   # or a plain string
+  "periodo": "Últimos 12 meses vs. os 12 anteriores", "recorte": "Só pedidos pagos",
+  "suposicoes": ["Pedidos cancelados ficam fora"],
+  "aprovado": True,        # False when the user skipped approval
+  "exibir": False,         # True adds a discreet "Sobre este relatório" column (objetivo, público, pontos-chave, suposições) to the footer
+}
+```
+`build.py` validates the keys (a typo fails the build), and `verify.py` checks that the footer column shows up only when `exibir` is true.
+
+Proposal template (pt-BR; fill it in, cut the lines that don't apply, keep it under ~20 lines):
+
+```
+Antes de montar, confirma se o plano faz sentido:
+
+**Objetivo:** <decisão que o relatório apoia>
+**Público:** <quem lê> · linguagem <direta | formal>, <leiga | técnica>, pt-BR
+**Período:** <últimos 12 meses vs. 12 anteriores> · recorte: <tudo | …>
+
+**Filtros:** <Região>, <Canal>, <Categoria>, <UF> + período (12m, ano até hoje, tudo)
+**KPIs:** <Receita (soma)>, <Margem % (Σ margem ÷ Σ receita)>, <Pedidos>, <Ticket médio (Σ receita ÷ Σ pedidos)>
+<só pesquisa: **Métricas:** CSAT = % notas 4–5 em <coluna> (1–5) · CES = média de <coluna> (1–7) · NPS = <coluna> (0–10)>
+
+**Seções:**
+1. <Tendência>: <a receita está crescendo?> → linha semanal com o ano anterior
+2. <Geografia>: <onde cresce e onde cai?> → barras por região + mapa de UF
+3. <Mix>: <quais categorias puxam a margem?> → barras + dispersão desconto × margem
+4. Tabela detalhada + metodologia
+
+**Pontos-chave que vou responder:** <…> (<sem dados para X; fica de fora>)
+**Tema:** <Neutro (padrão) | Corporativo | sua marca: cor #…, fonte …, logo>
+**Vou assumir:** <pedidos cancelados fora>; <devoluções descontadas da receita>
+
+Posso seguir assim? Se quiser, mude qualquer item, ou diga "segue" e eu monto com isso.
+```
 
 ## 2. Profile and clean (pandas)
 
@@ -70,13 +118,15 @@ python3 $KIT/profile.py data.xlsx --sheet Vendas --out perfil.json --clean-out c
 
 ## 4. Narrative first — compute the story, then write it
 
+Write for the approved `contexto` (step 0). The headline answers the objetivo, the vocabulary fits the público, and every pontos-chave item gets an insight or a section, or an honest "os dados não permitem dizer".
+
 Structure, top to bottom (the template renders it in this order):
 1. **Masthead**: a kicker, a **title that states the main finding** (it is a sentence, not "Sales report"), a 1–2 sentence dek, and the source, period and generation date. Set `meta.sample` whenever the data is synthetic.
 2. **Highlights** (`insights`, 3–5 items): each is a computed fact with its number in bold, plus one line of context. The template shows `insightsScope`, so readers know which window they describe (they don't re-compute on filter).
 3. **KPI row** (3–6 `kpis`): value, delta vs. comparison window (▲▼ colored by `good` direction; rates in **p.p.**), sparkline at the current grain.
 4. **Sections**: each one has a `kicker` ("02 · Geografia"), a `title` that answers its `question`, an optional `lede`, and 1–4 charts.
 5. **Data table**: group by any dim, search, sort, paginate, and two CSV exports (the table view and the raw filtered rows).
-6. **Methodology and data quality**: measure definitions (from `description`), cleaning steps, quality limits, and the colophon.
+6. **Methodology and data quality**: measure definitions (from `description`), cleaning steps, quality limits, the colophon and, when `contexto.exibir` is true, a "Sobre este relatório" column.
 
 **Never invent a number or a direction.** Every sentence with a number or a claim ("grows", "falls", "peak at Black Friday") is generated from pandas results in the same script, with the wording derived from the sign. Example: `"encolhe" if g < 0 else "cresce menos"`. Name an event ("Black Friday") only if the computed peak really contains its date. Compute insights with the **same windows the HTML uses**: the `12m` preset = (max date − 12 months + 1 day … max date), and `yoy` compares the same dates one year earlier. Then check that your text matches the KPI row in the screenshot. If the data doesn't support a strong headline, write a neutral one.
 
@@ -145,6 +195,7 @@ spec = {
   "table": {"groupBy": ["uf", "canal"], "measures": [...], "columns": [...raw columns...], "pageSize": 12},
   "labels": {"col": "Label"}, "formats": {"col": "currency"},
   "methodology": {"cleaning": [...], "quality": [...], "colophon": "..."},
+  "contexto": {"objetivo": ..., "publico": ..., "pontos_chave": [...], "linguagem": ..., "exibir": False},  # Passo 0
   "theme": "corporativo",                  # preset | "marca.json" | {...overrides}; see TEMA.md (omit = Neutro)
   "stats": {"minN": 30, "level": 0.95},    # surveys only (cx.prepare fills it)
   "data": rb.encode_columnar(fact, date="data", dims=[...], nums=[...], decimals=0),
@@ -239,7 +290,7 @@ Then **look at the screenshots** (crop tall pages into chunks) and fix what a pi
 
 ## 9. Delivery
 
-- Send the `.html` file plus the hero screenshot (and mobile or dark if useful). Write 3–5 lines: what the report answers, the defaults you assumed, the data caveats, and how to use the filters.
+- Send the `.html` file plus the hero screenshot (and mobile or dark if useful). Write 3–5 lines: what the report answers (tie it back to the approved objetivo and pontos-chave), the defaults you assumed (`contexto.suposicoes`), the data caveats, and how to use the filters.
 - The file opens offline and works by double-click: fonts and libraries are inlined. `build.py --cdn` trades that for a smaller file (it loads the pinned jsDelivr builds; requires internet).
 - Offer next steps (another cut, a brand theme, a monthly refresh as a routine). **Deploy to Vercel or share a link only if the user asks.**
 
