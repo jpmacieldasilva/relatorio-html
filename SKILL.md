@@ -5,7 +5,7 @@ description: Turn any dataset (CSV, XLSX, JSON, Parquet, SQLite/SQL dump, Sheets
 
 # Relatório HTML — editorial, interactive reports from any dataset
 
-The output is one self-contained `.html` file that reads like a well-edited data story (FT / The Economist / Our World in Data), not a dashboard. It has a headline that states the finding, computed highlights, KPIs with deltas and sparklines, sections that each answer one question, a searchable table and an honest methodology note. Everything cross-filters. The look comes from a **theme** (`TEMA.md`). The default "Editorial" theme uses flat color blocks, huge tight type and measured micro-interactions, and fonts, colors, logo, shapes and motion are all configurable.
+The output is one self-contained `.html` file that reads like a well-edited data story (FT / The Economist / Our World in Data), not a dashboard. It has a headline that states the finding, computed highlights, KPIs with deltas and sparklines, sections that each answer one question, a searchable table and an honest methodology note. Everything cross-filters. The look comes from a **theme** (`TEMA.md`). The default "Neutro" theme is calm and neutral: off-white page, grey ink, one deep-blue primary, a colorblind-safe palette, KPI cards and subtle motion. Fonts, colors, logo, layout, shapes and motion are all configurable.
 
 Kit: every path below is relative to **this skill's folder** (the directory that contains this `SKILL.md`; call it `$KIT`, e.g. `~/.cursor/skills/relatorio-html` or wherever the repo was cloned). Scripts locate their own files via `Path(__file__)`, so they run from any working directory; `RELATORIO_KIT=/path/to/kit` overrides the location for the snippets below. Reuse the kit; never rewrite it per report.
 
@@ -16,10 +16,10 @@ Kit: every path below is relative to **this skill's folder** (the directory that
 | `build.py` | validates the spec, resolves the theme (`tema.py`), encodes data, inlines d3 + Observable Plot + fonts + logo → final HTML |
 | `verify.py` | headless Chromium QA + screenshots (+ PDF) |
 | `exemplos/vendas/preparar.py` | complete worked example (read it before your first report; copy its structure) |
-| `tema.py` + `temas/*.json` + `TEMA.md` | theme engine and presets (`editorial` default, `corporativo`, `jornal`, `noturno`): fonts (Google → inlined woff2, local files, system), colors, data palette, radius, rules, spacing, type scale, hero, motion, logo. Validates and checks contrast. Read `TEMA.md` before customizing |
+| `tema.py` + `temas/*.json` + `TEMA.md` | theme engine and presets (`neutro` default, `corporativo`, `jornal`, `noturno`, `destaque`): fonts (Google → inlined woff2, local files, system), colors, data palette, radius, rules, spacing, type scale, hero, motion, logo. Validates and checks contrast. Read `TEMA.md` before customizing |
 | `cx.py` | survey kit: detect CSAT / CES / NPS / date / comment / PII columns, briefing text, response-level indicator columns, Wilson / NPS-variance / t intervals, z-tests + Holm, drivers, response rate, PII scrubbing, offline comment themes |
 | `exemplos/cx/preparar.py` | worked survey example (fictional ISP, messy pt-BR export + invitation file) → `relatorio.html` |
-| `vendor/` | pinned d3 7.9.0, @observablehq/plot 0.6.17, Geist + Geist Mono (OFL) as base64 woff2; `fonts-cache/` holds downloaded Google Fonts |
+| `vendor/` | pinned d3 7.9.0, @observablehq/plot 0.6.17, Geist + Geist Mono (OFL, optional bundled fonts); `fonts-cache/` holds the Google Fonts the presets use (Inter, IBM Plex, Newsreader, Space Grotesk, JetBrains Mono, Archivo) so builds work offline |
 
 Import the Python helpers by path (the name `profile` clashes with the stdlib):
 ```python
@@ -40,7 +40,7 @@ Profile the data first (step 2, it takes seconds), so the questions are informed
 2. **The decision or question** the report must answer ("where should we cut spend?", "is the launch working?").
 3. **Key metrics**: propose the measures you found, and say how each is computed (sum, ratio of sums).
 4. **Period and time grain**: propose the default window (e.g. last 12 months vs. the same period a year earlier) and the comparison mode.
-5. **Look / brand**: a preset (Editorial default, Corporativo, Jornal, Noturno), the main brand color (hex), fonts (name of the Google/brand font, or "same as our site"), and the logo (file in the chat). Also light/dark/auto. Map the answers to `spec["theme"]` overrides with the table in `TEMA.md` (e.g. `{"primary": "#0057FF", "font": "Montserrat", "logo": "logo.svg"}`).
+5. **Look / brand**: a preset (Neutro default, Corporativo, Jornal, Noturno, Destaque), the main brand color (hex), fonts (name of the Google/brand font, or "same as our site"), and the logo (file in the chat). Also light/dark/auto. Map the answers to `spec["theme"]` overrides with the table in `TEMA.md` (e.g. `{"primary": "#0057FF", "font": "Montserrat", "logo": "logo.svg"}`).
 6. **Survey data only**: show `cx.briefing(cx.detect(df))`, which maps CSAT / CES / NPS / date / comment columns with scale, threshold and confidence, and ask the user to confirm or correct it. This answer does not count toward the 5.
 
 Rules:
@@ -118,8 +118,12 @@ Principles (Tufte, Few, Cleveland), already built into the template. Don't fight
 - **Global filters**: date presets (`12m`, `ytd`, `24m`, `90d`, `30d`, `all`) plus a custom range popover, multi-select dropdowns with search and live counts, active-filter chips, "Limpar filtros", and an "N / total" counter.
 - **Cross-filtering**: every component re-renders from the filtered rows. Clicking a bar, a share segment, a scatter dot, a heatmap cell, a change or dumbbell row, or a small-multiple title filters the whole report (Shift-click adds to the selection). A chart ignores its own dimension's filter, so the selection is shown as a highlight and the alternatives stay visible.
 - Tooltips on every mark, and a hover crosshair on time series.
-- Responsive layout: editorial 1440 grid (section text in a 688 px main column; charts in the main column, or the wide column when a section has `half`/`third` charts, `columns`, or `"wide": true`); `span: full|half|third|twothirds`; halves stack under 1240 px, everything is one column under 1100 px. On phones the filter bar scrolls horizontally and the KPIs sit in two columns.
-- **Motion** (default timings; theme `motion.speed` scales them all; off with `motion.enabled: false`, `prefers-reduced-motion` or `?static=1`): the hero opens full-height and settles (1.1 s) while the art strip wipes in; blocks fade up once on scroll; bars and columns grow 900 ms `cubic-bezier(.22,1,.36,1)` with a 60 ms stagger and their values fade in after (0.4 s); lines/areas wipe left→right, dots pop, heatmap cells cascade; KPI numbers count up (650 ms ease-out, units and decimals kept) when the band enters, and tween from the old value on every filter change; bars/columns animate from their previous size when filters change; the header hides on scroll down and returns on scroll up; a sticky left TOC marks the active section with a "——" line; a chapter menu in the primary color drops from the top-left.
+- Responsive layout: 1440 grid (section text in a 688 px main column; charts in the main column, or the wide column when a section has `half`/`third` charts, `columns`, or `"wide": true`); `span: full|half|third|twothirds`; halves stack under 1240 px, everything is one column under 1100 px. On phones the filter bar scrolls horizontally and the KPIs sit in two columns.
+- **Motion** (theme `motion.speed` scales every duration — the default theme runs at 0.65×; off with `motion.enabled: false`, `prefers-reduced-motion` or `?static=1`):
+  - On load: title, meta and KPI cards fade up with a short stagger (clean layout). The blocks layout instead opens the hero taller and lets it settle, and the optional art strip wipes in.
+  - On scroll: blocks fade up once. Bars and columns grow with a 60 ms stagger (`cubic-bezier(.22,1,.36,1)`) and their values fade in after. Lines and areas draw left → right, dots pop and heatmap cells cascade.
+  - KPI numbers count up when they enter and tween from the old value on every filter change. Bars and columns animate from their previous size when filters change.
+  - Navigation: the header hides on scroll down and returns on scroll up. The sticky left TOC marks the active chapter with a primary-color bar on a hairline rail. The chapter menu slides in as a side drawer.
 - Light/dark: toggle, `prefers-color-scheme`, and persistence; `?theme=dark` forces a theme for screenshots. Charts re-render with resolved theme colors.
 - **Print / PDF**: the PDF button or Ctrl+P re-renders at A4 width in light theme, hides the controls, prints a summary of the applied filters, and avoids breaks inside charts.
 - Hooks for QA and debugging: `window.__report.{state, setCats, toggleCat, setRange, preset, reset, revealAll, preparePrint, endPrint, stat, statFiltered, checks}`.
@@ -141,7 +145,7 @@ spec = {
   "table": {"groupBy": ["uf", "canal"], "measures": [...], "columns": [...raw columns...], "pageSize": 12},
   "labels": {"col": "Label"}, "formats": {"col": "currency"},
   "methodology": {"cleaning": [...], "quality": [...], "colophon": "..."},
-  "theme": "corporativo",                  # preset | "marca.json" | {...overrides}; see TEMA.md (omit = Editorial)
+  "theme": "corporativo",                  # preset | "marca.json" | {...overrides}; see TEMA.md (omit = Neutro)
   "stats": {"minN": 30, "level": 0.95},    # surveys only (cx.prepare fills it)
   "data": rb.encode_columnar(fact, date="data", dims=[...], nums=[...], decimals=0),
 }
@@ -150,11 +154,20 @@ rb.build(spec, "relatorio.html")          # validates spec + theme; fails loudly
 ```
 Text fields accept `**bold**` and `_italic_`. Chart-specific options are documented above each renderer in `template.html` (§7). For a chart type that doesn't exist, add a renderer to `CHARTS` in the template (it must read `filterRows()` and call `toggleCat` on click) and register it in `build.py` `CHART_TYPES`. Keep it generic.
 
-Design system: the default **Editorial** theme (`temas/editorial.json`; every value below is a theme key, see `TEMA.md`):
-- **Type**: Geist at weight 500 for everything that speaks: hero 120 px / 0.95 / −0.06em, section titles 40 px / −0.04em, chart titles 24 px, KPI numbers 85 px (auto-fit). Body 16 px / 1.4. **Geist Mono** 12 px uppercase for kickers, filter labels, table headers and hints. Tabular figures for every number.
-- **Color**: white page and black ink; full-bleed `primary` blocks (orange `#FE7445`) for the hero and the statement + KPI band; `accent` (lavender `#CDABFE`) for data; strong 2 px rule under every chart title; warm light grey for hovers. Dark mode: near-black page, same blocks and data colors, light rules. Ink on colored blocks is picked automatically for ≥ 4.5:1.
-- **Layout**: fixed header (brand block with optional logo, "Sumário +" segment, theme/PDF on the right); hero (`block` = full-bleed color, or `plain`) with mono kicker, huge headline and meta bottom-right; an optional data-driven dot-matrix art strip (`hero.art`); the band with the subtitle as a statement on the left, KPI columns with hairlines and the highlights as two-column prose; sections opened by a full-width rule, a mono kicker on the left and a numbered title; a dark methodology footer with a giant wordmark.
-- **Charts**: flat, radius from the theme (0 by default), no shadows, no gridline noise. Bar lists put the label above a 16 px bar with the value riding its end and a muted delta next to the label.
+Design system: the default **Neutro** theme (`temas/neutro.json`; every value below is a theme key, see `TEMA.md`):
+- **Type**: Inter for text and headings (600 for headings, slight negative tracking): title 52 px / 1.1, section titles 30 px, chart titles 18 px, KPI values 40 px (auto-fit), body 16 px / 1.4. **IBM Plex Mono** 12 px uppercase for kickers, filter labels, table headers and hints. Tabular figures for every number.
+- **Color**:
+  - Page and ink: off-white page `#FAFAF9` with white cards, grey ink scale (`#1B1F24` ink, `#59616C` muted), light hairlines `#E3E5E8`, chart-title rules `#C8CDD3`.
+  - Primary: deep blue `#1F4E79`, used for kickers, the active TOC bar and single-series lines.
+  - Data: `#3A78B5` with a light area fill. The categorical palette is colorblind-safe (blue, orange, teal, rose, purple, olive, grey, tan). Good/bad is blue ↔ orange, plus ▲/▼.
+  - Dark mode: graphite page `#111418` with lighter blues.
+  - Contrast: ink on any colored surface is picked automatically for ≥ 4.5:1.
+- **Layout** (`layout.style: "clean"`):
+  - Header and hero: a plain header bar with a hairline (brand or logo plus a "dados de exemplo" pill, "Sumário +", theme, PDF). The hero sits on the page color: kicker, title, meta on the left.
+  - Band: the subtitle as a lead paragraph, KPI cards in one row (up to 6; 2 per row on phones), then the highlights in three columns with a thin left rule.
+  - Body: sections opened by a hairline, a colored mono kicker on the left and a numbered title. The footer is light and holds the methodology.
+  - The other layout, `blocks` (presets `corporativo`, `noturno`, `destaque`), puts the hero and KPI band on full-bleed primary color with big type and a dark footer.
+- **Charts**: flat, radius from the theme (10 px in Neutro: bar ends, cards, tooltips), no shadows, no gridline noise. Bar lists put the label above a 16 px bar with the value riding its end and a muted delta next to the label.
 - Copy: short, declarative, in the reader's language. No "Dashboard" in the title, no emoji.
 - Brand: put the user's look in `spec["theme"]` (shorthands `primary`, `accent`, `font`, `heading`, `mono`, `logo`, `brand`). `build.py` prints `theme:` warnings, which include contrast below 4.5:1 and fonts falling back to system fonts. Read them and fix or mention them.
 

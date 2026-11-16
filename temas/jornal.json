@@ -1,29 +1,119 @@
 {
   "name": "Jornal",
-  "description": "Editorial de jornal: títulos serifados (Newsreader), corpo Inter, herói sem bloco de cor, vermelho como cor principal.",
+  "description": "Jornal: títulos serifados (Newsreader), corpo Inter, layout limpo sem blocos de cor, vermelho como cor principal.",
   "mode": "light",
+  "layout": {
+    "style": "clean"
+  },
   "fonts": {
-    "heading": { "family": "Newsreader", "source": "google", "weights": [400, 500, 600], "fallback": "serif" },
-    "body":    { "family": "Inter", "source": "google", "weights": [400, 500] },
-    "mono":    { "family": "IBM Plex Mono", "source": "google", "weights": [400] }
+    "heading": {
+      "family": "Newsreader",
+      "source": "google",
+      "weights": [
+        400,
+        500,
+        600
+      ],
+      "fallback": "serif"
+    },
+    "body": {
+      "family": "Inter",
+      "source": "google",
+      "weights": [
+        400,
+        500
+      ]
+    },
+    "mono": {
+      "family": "IBM Plex Mono",
+      "source": "google",
+      "weights": [
+        400
+      ]
+    }
   },
   "colors": {
     "primary": "#B3261E",
     "accent": "#2F6F8F",
-    "light": { "bg": "#FBF9F4", "surface": "#FFFFFF", "surface2": "#F2EEE5", "ink": "#1A1814", "muted": "#615B52", "faint": "#9C958A",
-               "rule": "#E4DED2", "ruleStrong": "#1A1814", "context": "#E3DDD1", "footerBg": "#1A1814", "brandBg": "#B3261E", "artBg": "#1A1814" },
-    "dark":  { "bg": "#14120F", "surface": "#1B1915", "surface2": "#23201B", "ink": "#F1ECE2", "muted": "#A59E92", "faint": "#6B655C",
-               "rule": "#2E2A24", "ruleStrong": "#F1ECE2", "context": "#302C25", "footerBg": "#0D0C0A", "brandBg": "#B3261E", "artBg": "#0D0C0A", "accent": "#7FB6D1" }
+    "light": {
+      "bg": "#FBF9F4",
+      "surface": "#FFFFFF",
+      "surface2": "#F2EEE5",
+      "ink": "#1A1814",
+      "muted": "#615B52",
+      "faint": "#9C958A",
+      "rule": "#E4DED2",
+      "ruleStrong": "#1A1814",
+      "context": "#E3DDD1",
+      "footerBg": "#1A1814",
+      "brandBg": "#B3261E",
+      "artBg": "#1A1814"
+    },
+    "dark": {
+      "bg": "#14120F",
+      "surface": "#1B1915",
+      "surface2": "#23201B",
+      "ink": "#F1ECE2",
+      "muted": "#A59E92",
+      "faint": "#6B655C",
+      "rule": "#2E2A24",
+      "ruleStrong": "#F1ECE2",
+      "context": "#302C25",
+      "footerBg": "#0D0C0A",
+      "brandBg": "#B3261E",
+      "artBg": "#0D0C0A",
+      "accent": "#7FB6D1"
+    }
   },
   "palette": {
-    "categorical": ["#2F6F8F", "#B3261E", "#D9A441", "#6E8B5B", "#1A1814", "#9C6B98", "#A9BFCB", "#D8CFC0"],
-    "sequential": ["#F2EEE5", "#8DB3C7", "#1F4E66"],
-    "diverging": ["#B3261E", "#E6A39C", "#E4DED2", "#9CC0D3", "#2F6F8F"],
+    "categorical": [
+      "#2F6F8F",
+      "#B3261E",
+      "#D9A441",
+      "#6E8B5B",
+      "#1A1814",
+      "#9C6B98",
+      "#A9BFCB",
+      "#D8CFC0"
+    ],
+    "sequential": [
+      "#F2EEE5",
+      "#8DB3C7",
+      "#1F4E66"
+    ],
+    "diverging": [
+      "#B3261E",
+      "#E6A39C",
+      "#E4DED2",
+      "#9CC0D3",
+      "#2F6F8F"
+    ],
     "positive": "#2F6F8F",
     "negative": "#B3261E"
   },
-  "shape": { "radius": 0, "rule": 1, "ruleStrong": 1, "ruleSection": 3 },
-  "type": { "hero": 104, "h2": 42, "chartTitle": 26, "kpi": 76, "dek": 30, "headingWeight": 500, "tracking": 0.3, "heroLineHeight": 1.0 },
-  "hero": { "style": "plain", "art": false },
-  "motion": { "enabled": true, "speed": 1 }
+  "shape": {
+    "radius": 0,
+    "rule": 1,
+    "ruleStrong": 1,
+    "ruleSection": 3
+  },
+  "type": {
+    "hero": 72,
+    "h2": 38,
+    "chartTitle": 22,
+    "kpi": 52,
+    "dek": 22,
+    "headingWeight": 500,
+    "tracking": 0.3,
+    "heroLineHeight": 1.0,
+    "kpiLabel": 16
+  },
+  "hero": {
+    "style": "plain",
+    "art": false
+  },
+  "motion": {
+    "enabled": true,
+    "speed": 1
+  }
 }

@@ -3,7 +3,7 @@
 tema.py — theme engine for the report kit.
 
 A theme is a JSON file (see temas/*.json and TEMA.md). The report spec field `theme` accepts:
-    None / omitted            -> temas/editorial.json (the default)
+    None / omitted            -> temas/neutro.json (the default)
     "corporativo"             -> a preset name from temas/
     "minha-marca.json"        -> a path to a theme JSON (may contain "extends": "<preset or path>")
     {...}                     -> inline overrides merged on top of the default (or of "extends")
@@ -38,7 +38,7 @@ HERE = Path(__file__).resolve().parent
 PRESETS = HERE / "temas"
 VENDOR = HERE / "vendor"
 FONT_CACHE = VENDOR / "fonts-cache"
-DEFAULT = "editorial"
+DEFAULT = "neutro"
 BUNDLED = {"geist": "Geist", "geist mono": "Geist Mono"}
 FALLBACK = {
     "sans": 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
@@ -46,7 +46,7 @@ FALLBACK = {
     "mono": 'ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace',
 }
 TOP_KEYS = {"name", "description", "mode", "brand", "fonts", "colors", "palette", "shape", "space", "type",
-            "hero", "motion", "extends"}
+            "hero", "motion", "layout", "extends"}
 SHORTHANDS = {"primary", "accent", "font", "heading", "body", "mono", "logo", "brand"}
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/124.0 Safari/537.36")
@@ -144,7 +144,11 @@ def presets() -> list[str]:
     return sorted(p.stem for p in PRESETS.glob("*.json"))
 
 
+ALIASES = {"editorial": "destaque"}      # old preset name (before "neutro" became the default)
+
+
 def _load_ref(ref: str, base_dir: Path, seen: set) -> dict:
+    ref = ALIASES.get(ref, ref)
     p = PRESETS / f"{ref}.json"
     if not p.exists():
         p = Path(ref)
@@ -158,12 +162,14 @@ def _load_ref(ref: str, base_dir: Path, seen: set) -> dict:
     seen.add(key)
     data = json.loads(p.read_text(encoding="utf-8"))
     data["_dir"] = str(p.parent)
+    if p.parent.resolve() == PRESETS.resolve():
+        data["_preset"] = p.stem
     return _with_parent(data, p.parent, seen)
 
 
 def _with_parent(data: dict, base_dir: Path, seen: set) -> dict:
     parent = data.get("extends")
-    is_default_file = Path(data.get("_dir", "")) == PRESETS and data.get("name") == "Editorial"
+    is_default_file = Path(data.get("_dir", "")) == PRESETS and data.get("_preset") == DEFAULT
     if parent:
         return deep_merge(_load_ref(parent, base_dir, seen), {k: v for k, v in data.items() if k != "extends"})
     if is_default_file:
@@ -413,6 +419,8 @@ def validate(data: dict) -> list[str]:
     for k in ("positive", "negative"):
         if pal.get(k) is not None and not is_hex(pal[k]):
             probs.append(f"theme.palette.{k} must be a hex color")
+    if (data.get("layout") or {}).get("style", "clean") not in ("clean", "blocks"):
+        probs.append("theme.layout.style must be 'clean' (plain header, KPI cards, light footer) or 'blocks' (full-bleed color hero + KPI band)")
     if data.get("hero", {}).get("style", "block") not in ("block", "plain"):
         probs.append("theme.hero.style must be 'block' (full-bleed color) or 'plain'")
     return probs
@@ -461,6 +469,9 @@ def resolve(theme_spec=None, base_dir: str | Path | None = None, *, legacy_meta:
         "--rule-section-w": f"{_num(shape, 'ruleSection', 1, 0, 8, P, 'shape')}px",
         "--mk": str(_num(motion, "speed", 1, 0.25, 4, P, "motion")),
     }
+    layout = data.get("layout") or {}
+    area_l = _num(layout, "areaOpacity", 0.6, 0.05, 1, P, "layout")
+    area_d = _num(layout, "areaOpacityDark", max(area_l, min(1, area_l * 1.4)), 0.05, 1, P, "layout")
 
     def mode_vars(mode: str) -> dict:
         m = dict(cols[mode])
@@ -518,6 +529,7 @@ def resolve(theme_spec=None, base_dir: str | Path | None = None, *, legacy_meta:
             "--heat-lo": seq[0], "--heat-mid": seq[1], "--heat-hi": seq[2], "--heat-ink-hi": best_ink(seq[2]),
             "--footer-bg": footer_bg, "--footer-ink": footer_ink, "--brand-bg": brand_bg, "--brand-ink": brand_ink,
             "--art-bg": art_bg, "--art-ink": best_ink(art_bg, "#FFFFFF"),
+            "--area-op": str(area_d if mode == "dark" else area_l),
         }
         for i, c in enumerate(cat[:8], 1):
             v[f"--c{i}"] = c
@@ -534,6 +546,7 @@ def resolve(theme_spec=None, base_dir: str | Path | None = None, *, legacy_meta:
     brand = data.get("brand") or {}
     th.cfg = {
         "name": data.get("name"), "mode": data.get("mode", "auto"),
+        "layout": layout.get("style", "clean"),
         "hero": hero.get("style", "block"), "art": bool(hero.get("art", True)),
         "motion": bool(motion.get("enabled", True)), "speed": root["--mk"] and float(root["--mk"]),
         "brand": brand.get("name"), "logo": logo_uri(brand.get("logo"), tdir, W),

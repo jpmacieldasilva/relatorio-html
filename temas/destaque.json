@@ -1,0 +1,128 @@
+{
+  "name": "Destaque",
+  "description": "Layout em blocos: herói e faixa de KPIs em amarelo-sol, dados em azul-petróleo, Archivo + IBM Plex Mono. Para apresentações e capas.",
+  "mode": "light",
+  "layout": {
+    "style": "blocks"
+  },
+  "fonts": {
+    "heading": {
+      "family": "Archivo",
+      "source": "google",
+      "weights": [
+        400,
+        500,
+        600,
+        700
+      ]
+    },
+    "body": {
+      "family": "Archivo",
+      "source": "google",
+      "weights": [
+        400,
+        500,
+        600,
+        700
+      ]
+    },
+    "mono": {
+      "family": "IBM Plex Mono",
+      "source": "google",
+      "weights": [
+        400,
+        500
+      ]
+    }
+  },
+  "colors": {
+    "primary": "#F6C945",
+    "accent": "#1F7A8C",
+    "light": {
+      "bg": "#FFFFFF",
+      "surface": "#FFFFFF",
+      "surface2": "#F5F4EF",
+      "ink": "#141414",
+      "muted": "#5E5E5A",
+      "faint": "#94938D",
+      "rule": "#E5E3DC",
+      "ruleStrong": "#141414",
+      "context": "#E2E0D8",
+      "footerBg": "#141414",
+      "brandBg": "#FFFFFF",
+      "artBg": "#141414"
+    },
+    "dark": {
+      "bg": "#101010",
+      "surface": "#161616",
+      "surface2": "#1E1E1C",
+      "ink": "#F2F1EC",
+      "muted": "#A3A29C",
+      "faint": "#6C6B66",
+      "rule": "#2A2A27",
+      "ruleStrong": "#F2F1EC",
+      "context": "#2E2D2A",
+      "accent": "#4FB3C6",
+      "footerBg": "#000000",
+      "brandBg": "#101010",
+      "artBg": "#000000"
+    }
+  },
+  "palette": {
+    "categorical": [
+      "#1F7A8C",
+      "#E2733B",
+      "#5B8E3E",
+      "#8A5BA8",
+      "#141414",
+      "#D4A72C",
+      "#9FB8BF",
+      "#D9D2C3"
+    ],
+    "sequential": [
+      "#F1F6F7",
+      "#79B3BF",
+      "#145A68"
+    ],
+    "diverging": [
+      "#C4502A",
+      "#EDB294",
+      "#E6E4DD",
+      "#8FC2CC",
+      "#1F7A8C"
+    ],
+    "positive": "#1F7A8C",
+    "negative": "#C4502A"
+  },
+  "shape": {
+    "radius": 2,
+    "rule": 1,
+    "ruleStrong": 2,
+    "ruleSection": 1
+  },
+  "space": {
+    "section": 112,
+    "chartGap": 80,
+    "band": 52
+  },
+  "type": {
+    "hero": 80,
+    "h2": 38,
+    "chartTitle": 22,
+    "kpi": 72,
+    "kpiLabel": 20,
+    "dek": 28,
+    "body": 16,
+    "headingWeight": 600,
+    "tracking": 0.55,
+    "heroLineHeight": 1.0
+  },
+  "hero": {
+    "style": "block",
+    "art": false
+  },
+  "motion": {
+    "enabled": true,
+    "speed": 0.9
+  }
+}

@@ -4,7 +4,7 @@
 
 Você descreve o relatório em Python (um *spec*). O kit valida o spec, embute os dados, as bibliotecas e as fontes, e gera um `.html` que abre offline com dois cliques. Depois um teste automático (Playwright) confere se tudo renderiza e responde aos filtros.
 
-![Relatório de vendas: hero e faixa de KPIs](docs/vendas-hero-claro.png)
+![Relatório de vendas no tema padrão (Neutro): título, filtros e KPIs em cartões](docs/vendas-hero-claro.png)
 
 <p>
   <img src="docs/vendas-hero-escuro.png" width="64%" alt="Modo escuro">
@@ -15,14 +15,14 @@ Você descreve o relatório em Python (um *spec*). O kit valida o spec, embute o
 
 - **Visualização editorial.** O título afirma o achado. Os destaques são calculados, os KPIs vêm com variação e minigráfico, e cada seção responde a uma pergunta. Seguem as regras de Tufte, Few e Cleveland: rótulos diretos, barras a partir do zero, nada de pizza com muitas fatias, nada de 3D, nada de dois eixos.
 - **Filtro cruzado em tudo.** Clicar numa barra, segmento, ponto, célula ou tema filtra o relatório inteiro (Shift soma à seleção). Há também presets de datas, intervalo livre, dropdowns com busca, chips de filtro ativo e uma tabela com busca, ordenação e exportação CSV.
-- **Micro-interações.** As barras crescem quando entram na tela, os números dos KPIs contam até o valor e se animam a cada filtro, as linhas se desenham, o cabeçalho se esconde ao rolar e há um sumário lateral fixo. Tudo respeita `prefers-reduced-motion`.
+- **Micro-interações discretas.** Título e cartões de KPI entram com um fade curto. As barras crescem quando entram na tela, os números dos KPIs contam até o valor e se animam a cada filtro, e as linhas se desenham. O cabeçalho se esconde ao rolar e o sumário lateral marca o capítulo ativo. A velocidade é configurável, e tudo respeita `prefers-reduced-motion`.
 - **Pesquisas de satisfação (CSAT, CES, NPS)** com estatística honesta:
   - o kit detecta as colunas de nota pelo nome e pela escala;
   - todo número traz intervalo de confiança de 95% e n (Wilson, variância do NPS, t);
   - diferenças passam por teste z com correção de Holm, e o texto só diz "subiu" ou "caiu" quando o teste confirma;
   - grupos pequenos aparecem sempre, marcados como *amostra pequena*;
   - há análise de impacto (drivers), taxa de resposta e temas dos comentários agrupados offline, com dados pessoais mascarados.
-- **Temas configuráveis.** Fontes (Google Fonts embutidas, arquivo local ou fonte do sistema), cor principal, paleta de dados, cantos, fios, espaçamento, escala tipográfica, hero, movimento e logo. Quatro presets: `editorial` (padrão), `corporativo`, `jornal` e `noturno`. O build checa o contraste (WCAG, 4,5:1).
+- **Temas configuráveis.** Fontes (Google Fonts embutidas, arquivo local ou fonte do sistema), cor principal, paleta de dados, cantos, fios, espaçamento, escala tipográfica, hero, movimento e logo. Dois layouts (`clean` e `blocks`) e cinco presets. O build checa o contraste (WCAG, 4,5:1).
 - **Um arquivo só.** d3 e Observable Plot vão embutidos, assim como as fontes e o logo. Tem modo claro e escuro, layout responsivo e um PDF pronto para impressão.
 - **QA automático.** `verify.py` abre o relatório no Chromium e checa erros no console, se cada gráfico renderizou, cliques e filtros, a tabela, o modo escuro e a ausência de rolagem lateral no celular. Também tira os screenshots.
 
@@ -40,6 +40,16 @@ Você descreve o relatório em Python (um *spec*). O kit valida o spec, embute o
 <img src="docs/cx-temas-comentarios.png" width="55%" alt="Temas dos comentários abertos">
 
 ### Temas
+
+O padrão é o **Neutro**: fundo off-white, tinta em escala de cinzas e um azul profundo como cor principal. A paleta de dados é segura para daltonismo. As fontes são Inter + IBM Plex Mono. O cabeçalho é simples, os KPIs vêm em cartões e o movimento é discreto. Para mudar, basta escolher outro preset ou sobrescrever qualquer valor.
+
+| Preset | Layout | Estilo |
+|---|---|---|
+| `neutro` (padrão) | `clean` | Neutro e calmo: cinzas, azul `#1F4E79`, Inter, cartões de KPI |
+| `corporativo` | `blocks` | Herói e faixa de KPIs em azul-marinho, IBM Plex |
+| `jornal` | `clean` | Títulos serifados (Newsreader), fundo creme, vermelho como cor principal |
+| `noturno` | `blocks` | Escuro, blocos verde-limão, Space Grotesk |
+| `destaque` | `blocks` | Herói em amarelo-sol, dados em azul-petróleo, Archivo; para apresentações |
 
 O mesmo relatório de vendas no preset `corporativo`:
 
@@ -108,7 +118,7 @@ spec["theme"] = {
 }
 ```
 
-Um tema completo (`temas/editorial.json`) define `fonts`, `colors` (light/dark), `palette` (categórica, sequencial, divergente, positivo/negativo), `shape`, `space`, `type`, `hero`, `motion` e `brand`. Veja [`TEMA.md`](TEMA.md). Para testar um tema sem gerar relatório: `python tema.py jornal`.
+Um tema completo (`temas/neutro.json`) define `layout` (`clean` ou `blocks`), `fonts`, `colors` (light/dark), `palette` (categórica, sequencial, divergente, positivo/negativo), `shape`, `space`, `type`, `hero`, `motion` e `brand`. Veja [`TEMA.md`](TEMA.md). Para testar um tema sem gerar relatório: `python tema.py jornal`.
 
 ## Limitações
 
@@ -143,6 +153,15 @@ It includes a **survey module** for CSAT, CES and NPS:
 - small groups always shown and flagged;
 - driver analysis, response rate, and offline comment themes with PII masking.
 
-The look is driven by **JSON themes**: fonts (Google Fonts inlined, local files or system), colors, palette, radius, spacing, type scale, hero, motion and logo. There are four presets, and contrast is checked at build time.
+The look is driven by **JSON themes**: layout (`clean` or `blocks`), fonts (Google Fonts inlined, local files or system), colors, palette, radius, spacing, type scale, hero, motion and logo. Contrast is checked at build time.
+
+The default theme, **Neutro**, is calm and neutral:
+
+- off-white page, grey ink scale and one deep-blue primary;
+- colorblind-safe data palette;
+- Inter + IBM Plex Mono;
+- plain header, KPI cards and subtle fade/grow motion.
+
+Other presets: `corporativo` (navy block hero), `jornal` (serif, newspaper), `noturno` (dark, lime) and `destaque` (sun-yellow blocks, for presentations).
 
 Quick start: `pip install -r requirements.txt && python -m playwright install chromium`, then `python exemplos/vendas/preparar.py` and `python verify.py exemplos/vendas/relatorio.html`. The folder is also a drop-in **AI agent skill** (`SKILL.md`, paths relative to the skill folder). Docs are mostly in Portuguese (pt-BR). Code comments and `SKILL.md` are in English. MIT licensed; bundled third-party licenses are listed in `NOTICE.md`.

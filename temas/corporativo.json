@@ -2,30 +2,125 @@
   "name": "Corporativo",
   "description": "Sóbrio: azul-marinho, IBM Plex, cantos levemente arredondados, tipografia menor e menos apertada, sem faixa de arte.",
   "mode": "light",
+  "layout": {
+    "style": "blocks"
+  },
   "fonts": {
-    "heading": { "family": "IBM Plex Sans", "source": "google", "weights": [400, 500, 600] },
-    "body":    { "family": "IBM Plex Sans", "source": "google", "weights": [400, 500, 600] },
-    "mono":    { "family": "IBM Plex Mono", "source": "google", "weights": [400, 500] }
+    "heading": {
+      "family": "IBM Plex Sans",
+      "source": "google",
+      "weights": [
+        400,
+        500,
+        600
+      ]
+    },
+    "body": {
+      "family": "IBM Plex Sans",
+      "source": "google",
+      "weights": [
+        400,
+        500,
+        600
+      ]
+    },
+    "mono": {
+      "family": "IBM Plex Mono",
+      "source": "google",
+      "weights": [
+        400,
+        500
+      ]
+    }
   },
   "colors": {
     "primary": "#0B2545",
     "accent": "#4F8EDC",
-    "light": { "bg": "#FFFFFF", "surface": "#FFFFFF", "surface2": "#F3F5F8", "ink": "#0E1726", "muted": "#5B6675", "faint": "#98A2B0",
-               "rule": "#E1E5EB", "ruleStrong": "#0E1726", "context": "#DDE3EA", "footerBg": "#0B2545", "brandBg": "#FFFFFF", "artBg": "#0B2545" },
-    "dark":  { "bg": "#0C1320", "surface": "#111A2B", "surface2": "#17223A", "ink": "#E9EEF5", "muted": "#9AA6B7", "faint": "#5E6B7E",
-               "rule": "#223049", "ruleStrong": "#E9EEF5", "context": "#253350", "footerBg": "#08101C", "brandBg": "#0C1320", "artBg": "#08101C", "primary": "#13315C" }
+    "light": {
+      "bg": "#FFFFFF",
+      "surface": "#FFFFFF",
+      "surface2": "#F3F5F8",
+      "ink": "#0E1726",
+      "muted": "#5B6675",
+      "faint": "#98A2B0",
+      "rule": "#E1E5EB",
+      "ruleStrong": "#0E1726",
+      "context": "#DDE3EA",
+      "footerBg": "#0B2545",
+      "brandBg": "#FFFFFF",
+      "artBg": "#0B2545"
+    },
+    "dark": {
+      "bg": "#0C1320",
+      "surface": "#111A2B",
+      "surface2": "#17223A",
+      "ink": "#E9EEF5",
+      "muted": "#9AA6B7",
+      "faint": "#5E6B7E",
+      "rule": "#223049",
+      "ruleStrong": "#E9EEF5",
+      "context": "#253350",
+      "footerBg": "#08101C",
+      "brandBg": "#0C1320",
+      "artBg": "#08101C",
+      "primary": "#13315C"
+    }
   },
   "palette": {
-    "categorical": ["#4F8EDC", "#0B2545", "#8DA9C4", "#13A89E", "#E0A458", "#7A8CA5", "#B9C7D8", "#D7DEE7"],
-    "sequential": ["#EEF3F9", "#8DB4E6", "#1F4E8C"],
-    "diverging": ["#B23A48", "#E8A3A9", "#E3E6EA", "#93B9E6", "#1F5FAE"],
+    "categorical": [
+      "#4F8EDC",
+      "#0B2545",
+      "#8DA9C4",
+      "#13A89E",
+      "#E0A458",
+      "#7A8CA5",
+      "#B9C7D8",
+      "#D7DEE7"
+    ],
+    "sequential": [
+      "#EEF3F9",
+      "#8DB4E6",
+      "#1F4E8C"
+    ],
+    "diverging": [
+      "#B23A48",
+      "#E8A3A9",
+      "#E3E6EA",
+      "#93B9E6",
+      "#1F5FAE"
+    ],
     "positive": "#4F8EDC",
     "negative": "#C8553D"
   },
-  "shape": { "radius": 4, "rule": 1, "ruleStrong": 1, "ruleSection": 1 },
-  "space": { "section": 96, "chartGap": 72, "band": 48 },
-  "type": { "hero": 84, "h2": 34, "chartTitle": 20, "kpi": 64, "kpiLabel": 18, "dek": 26, "body": 16,
-            "headingWeight": 600, "tracking": 0.4, "heroLineHeight": 1.02 },
-  "hero": { "style": "block", "art": false },
-  "motion": { "enabled": true, "speed": 0.8 }
+  "shape": {
+    "radius": 4,
+    "rule": 1,
+    "ruleStrong": 1,
+    "ruleSection": 1
+  },
+  "space": {
+    "section": 96,
+    "chartGap": 72,
+    "band": 48
+  },
+  "type": {
+    "hero": 84,
+    "h2": 34,
+    "chartTitle": 20,
+    "kpi": 64,
+    "kpiLabel": 18,
+    "dek": 26,
+    "body": 16,
+    "headingWeight": 600,
+    "tracking": 0.4,
+    "heroLineHeight": 1.02
+  },
+  "hero": {
+    "style": "block",
+    "art": false
+  },
+  "motion": {
+    "enabled": true,
+    "speed": 0.8
+  }
 }

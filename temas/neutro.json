@@ -1,0 +1,44 @@
+{
+  "name": "Neutro",
+  "description": "Tema padrão: fundo off-white, tinta em escala de cinzas, um azul profundo como cor principal, paleta categórica segura para daltonismo, Inter + IBM Plex Mono, cabeçalho simples, KPIs em cartões, movimento discreto.",
+  "mode": "auto",
+  "layout": { "style": "clean", "areaOpacity": 0.14, "areaOpacityDark": 0.22 },
+  "brand": { "name": null, "logo": null },
+  "fonts": {
+    "heading": { "family": "Inter", "source": "google", "weights": [400, 500, 600] },
+    "body":    { "family": "Inter", "source": "google", "weights": [400, 500, 600] },
+    "mono":    { "family": "IBM Plex Mono", "source": "google", "weights": [400, 500] }
+  },
+  "colors": {
+    "primary": "#1F4E79",
+    "accent": "#3A78B5",
+    "light": {
+      "bg": "#FAFAF9", "surface": "#FFFFFF", "surface2": "#F2F3F5",
+      "ink": "#1B1F24", "muted": "#59616C", "faint": "#8B929C",
+      "rule": "#E3E5E8", "ruleStrong": "#C8CDD3", "context": "#DADDE2",
+      "line": "#1F4E79",
+      "footerBg": "#F1F2F4", "brandBg": "#FAFAF9", "artBg": "#F1F2F4"
+    },
+    "dark": {
+      "bg": "#111418", "surface": "#171B21", "surface2": "#1E232A",
+      "ink": "#E7E9EC", "muted": "#A1A8B2", "faint": "#6F7782",
+      "rule": "#272D35", "ruleStrong": "#3A424D", "context": "#2C333C",
+      "primary": "#7DAEDC", "accent": "#5E9BD6", "line": "#9CC3E8",
+      "footerBg": "#0C0F12", "brandBg": "#111418", "artBg": "#0C0F12"
+    }
+  },
+  "palette": {
+    "categorical": ["#3A78B5", "#E0912F", "#2E9C8A", "#C75B7A", "#7B6BB8", "#8E9A3B", "#6A737D", "#B4875A"],
+    "sequential": ["#EEF3F8", "#8FB4D8", "#1F4E79"],
+    "sequentialDark": ["#1E232A", "#3E6E9E", "#9CC3E8"],
+    "diverging": ["#B35A1F", "#E8B07F", "#E4E6E9", "#94B9DD", "#2F6BA8"],
+    "positive": "#2F6BA8",
+    "negative": "#C2611F"
+  },
+  "shape": { "radius": 10, "rule": 1, "ruleStrong": 1, "ruleSection": 1 },
+  "space": { "section": 96, "chartGap": 64, "band": 40 },
+  "type": { "hero": 52, "h2": 30, "chartTitle": 18, "kpi": 40, "kpiLabel": 14, "dek": 19, "body": 16,
+            "headingWeight": 600, "tracking": 0.35, "heroLineHeight": 1.1 },
+  "hero": { "style": "plain", "art": false },
+  "motion": { "enabled": true, "speed": 0.65 }
+}
