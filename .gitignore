@@ -16,3 +16,6 @@ exemplos/*/capturas/
 *-hero-dark.png
 *-hero-mobile.png
 *.pdf
+
+# README images
+!docs/*.png
