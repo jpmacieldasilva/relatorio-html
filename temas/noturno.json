@@ -1,0 +1,31 @@
+{
+  "name": "Noturno",
+  "description": "Escuro por padrão: fundo grafite, bloco de herói verde-limão, dados em ciano, Space Grotesk + Inter + JetBrains Mono.",
+  "mode": "dark",
+  "fonts": {
+    "heading": { "family": "Space Grotesk", "source": "google", "weights": [400, 500, 600] },
+    "body":    { "family": "Inter", "source": "google", "weights": [400, 500] },
+    "mono":    { "family": "JetBrains Mono", "source": "google", "weights": [400] }
+  },
+  "colors": {
+    "primary": "#C6F432",
+    "accent": "#67D4F5",
+    "light": { "bg": "#FAFAF7", "surface": "#FFFFFF", "surface2": "#F0F1EC", "ink": "#101114", "muted": "#5F6167", "faint": "#9A9CA2",
+               "rule": "#E3E4E0", "ruleStrong": "#101114", "context": "#E2E3DE", "footerBg": "#101114", "brandBg": "#101114", "artBg": "#101114",
+               "accent": "#1797C2" },
+    "dark":  { "bg": "#0E0F12", "surface": "#15171B", "surface2": "#1C1F24", "ink": "#ECEDEF", "muted": "#9A9DA4", "faint": "#5D6068",
+               "rule": "#262930", "ruleStrong": "#ECEDEF", "context": "#2A2D34", "footerBg": "#07080A", "brandBg": "#07080A", "artBg": "#07080A" }
+  },
+  "palette": {
+    "categorical": ["#67D4F5", "#C6F432", "#F78FB3", "#A78BFA", "#FDBA74", "#5EEAD4", "#94A3B8", "#E2E8F0"],
+    "sequential": ["#EEF6F9", "#67D4F5", "#0B6E8E"],
+    "sequentialDark": ["#1C1F24", "#1B7C9C", "#67D4F5"],
+    "diverging": ["#F25F5C", "#F7A9A8", "#5D6068", "#9BE3F7", "#22B8E3"],
+    "positive": "#67D4F5",
+    "negative": "#F25F5C"
+  },
+  "shape": { "radius": 2, "rule": 1, "ruleStrong": 2, "ruleSection": 1 },
+  "type": { "hero": 112, "h2": 40, "chartTitle": 24, "kpi": 80, "dek": 30, "headingWeight": 500, "tracking": 0.7 },
+  "hero": { "style": "block", "art": true },
+  "motion": { "enabled": true, "speed": 1.15 }
+}

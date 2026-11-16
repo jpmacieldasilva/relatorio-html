@@ -1,0 +1,40 @@
+{
+  "name": "Editorial",
+  "description": "Tema padrão: blocos de cor chapados, tipografia grande e apertada, dados em lilás, acentos em laranja, fios pretos.",
+  "mode": "auto",
+  "brand": { "name": null, "logo": null },
+  "fonts": {
+    "heading": { "family": "Geist", "source": "bundled" },
+    "body":    { "family": "Geist", "source": "bundled" },
+    "mono":    { "family": "Geist Mono", "source": "bundled" }
+  },
+  "colors": {
+    "primary": "#FE7445",
+    "accent": "#CDABFE",
+    "light": {
+      "bg": "#FFFFFF", "surface": "#FFFFFF", "surface2": "#F7F6F4",
+      "ink": "#000000", "muted": "#666666", "faint": "#999999",
+      "rule": "#E2E2E2", "ruleStrong": "#000000", "context": "#E6E2DC",
+      "footerBg": "#000000", "brandBg": "#000000", "artBg": "#000000"
+    },
+    "dark": {
+      "bg": "#0A0A0A", "surface": "#121212", "surface2": "#1A1A1A",
+      "ink": "#F4F2EE", "muted": "#9E9C98", "faint": "#6B6A67",
+      "rule": "#262626", "ruleStrong": "#F4F2EE", "context": "#2B2A28",
+      "footerBg": "#000000", "brandBg": "#000000", "artBg": "#000000"
+    }
+  },
+  "palette": {
+    "categorical": ["#CDABFE", "#FE7445", "#7BA2AD", "#3292FF", "#111111", "#A89BE8", "#C8D5C2", "#D6CFC9"],
+    "sequential": ["#F7F6F4", "#CDABFE", "#6A3FD0"],
+    "diverging": ["#E0531F", "#FEB49A", "#E4E1DC", "#CDABFE", "#7C4DDB"],
+    "positive": "#CDABFE",
+    "negative": "#FE7445"
+  },
+  "shape": { "radius": 0, "rule": 1, "ruleStrong": 2, "ruleSection": 1 },
+  "space": { "section": 120, "chartGap": 88, "band": 56 },
+  "type": { "hero": 120, "h2": 40, "chartTitle": 24, "kpi": 85, "kpiLabel": 24, "dek": 32, "body": 16,
+            "headingWeight": 500, "tracking": 1, "heroLineHeight": 0.95 },
+  "hero": { "style": "block", "art": true },
+  "motion": { "enabled": true, "speed": 1 }
+}

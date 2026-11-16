@@ -1,0 +1,6 @@
+pandas>=2.1
+numpy>=1.26
+openpyxl>=3.1       # .xlsx input
+pyarrow>=14         # .parquet / .feather input
+playwright>=1.40    # verify.py (then: python -m playwright install chromium)
+pillow>=10          # optional: cropping screenshots

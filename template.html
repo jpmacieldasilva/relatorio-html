@@ -1,0 +1,2271 @@
+<!doctype html>
+<!--
+  Relatório HTML — reusable report shell
+  ---------------------------------------------------------------------------
+  This file is a TEMPLATE. Do not edit it per report: build.py replaces the
+  placeholders below with real content and writes a single self-contained file.
+
+    FONTS slot (in <style>)  -> @font-face rules of the theme fonts (base64 woff2)
+    THEME slot (in <style>)  -> theme custom properties resolved by tema.py (temas/*.json)
+    D3 / PLOT slots          -> d3 v7 (UMD) and @observablehq/plot 0.6.x (UMD)
+    REPORT_JSON slot         -> the report spec + data (see SKILL.md, "The spec")
+    TITLE / LANG slots       -> document title and lang attribute
+  (each slot is replaced exactly once; never write a slot marker in a comment)
+
+  Rendering model: one global filter state -> every component re-renders from
+  the filtered rows. Categorical charts are computed with every filter EXCEPT
+  their own dimension (classic cross-filter), so the selection stays visible
+  as a highlight instead of collapsing the chart to a single bar.
+-->
+<html lang="__LANG__" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>__TITLE__</title>
+<style>
+/*__FONTS__*/
+
+/* ===================================================================== */
+/* Design tokens — default "Editorial" theme (see TEMA.md).                */
+/* build.py injects the resolved theme right after this block (__THEME__), */
+/* so every value here is only a fallback.                                 */
+/* ===================================================================== */
+:root {
+  --bg: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface-2: #F7F6F4;       /* rows, hovers, heat-low */
+  --ink: #000000;
+  --ink-2: #111111;
+  --muted: #666666;           /* solid, so Plot gets a literal */
+  --faint: #999999;
+  --rule: #E2E2E2;            /* hairlines */
+  --rule-strong: #000000;     /* chart-title rules + section rules */
+  --primary: #FE7445;         /* brand color: hero/band blocks, menu */
+  --primary-text: #C9441A;    /* primary shade that passes 4.5:1 as text */
+  --hero: var(--primary);
+  --hero-ink: #000000;
+  --hero-muted: #4D2213;
+  --hero-rule: #261108;
+  --accent: #CDABFE;          /* primary data color */
+  --accent-deep: #7C4DDB;     /* accent that reads as text / thin strokes */
+  --accent-ink: #000000;      /* text on accent */
+  --pos: var(--accent);       /* "good" change fill */
+  --pos-ink: #6A3FD0;
+  --neg: #FE7445;             /* "bad" change fill */
+  --neg-ink: #C9441A;
+  --context: #E6E2DC;         /* de-emphasised marks */
+  --line: #000000;            /* single-series line stroke */
+  --area-op: .6;
+  --tip-bg: #000000; --tip-ink: #FFFFFF;
+  --heat-lo: #F7F6F4; --heat-mid: #CDABFE; --heat-hi: #6A3FD0; --heat-ink-hi: #FFFFFF;
+  --footer-bg: #000000; --footer-ink: #FFFFFF;
+  --brand-bg: #000000; --brand-ink: #FFFFFF;
+  --art-bg: #000000; --art-ink: #FFFFFF;
+  /* data palettes: categorical c1–c8, diverging dv1 (strong negative) … dv3 (neutral) … dv5 (strong positive) */
+  --c1: #CDABFE; --c2: #FE7445; --c3: #7BA2AD; --c4: #3292FF; --c5: #111111; --c6: #A89BE8; --c7: #C8D5C2; --c8: #D6CFC9;
+  --dv1: #E0531F; --dv2: #FEB49A; --dv3: #E4E1DC; --dv4: #CDABFE; --dv5: #7C4DDB;
+  --dv1-ink: #000000; --dv2-ink: #000000; --dv3-ink: #000000; --dv4-ink: #000000; --dv5-ink: #FFFFFF;
+  /* type */
+  --sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --heading: var(--sans);
+  --mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --hw: 500;                  /* heading weight */
+  --track: 1;                 /* multiplier on the tight negative tracking of headings */
+  --lh-hero: .95;
+  --fs-hero: 120; --fs-h2: 40; --fs-chart: 24; --fs-kpi: 85; --fs-label: 24; --fs-dek: 32; --fs-body: 16;   /* unitless px at 1440 */
+  /* space + shape */
+  --sp-section: 120; --sp-chart: 88; --sp-band: 56;
+  --radius: 0px; --rule-w: 1px; --rule-strong-w: 2px; --rule-section-w: 1px;
+  /* motion: --mk multiplies every duration (theme.motion.speed) */
+  --mk: 1;
+  --ease-out: cubic-bezier(.22, 1, .36, 1);     /* bars/columns */
+  --ease-io: cubic-bezier(.44, 0, .56, 1);      /* link + nav color */
+  --ease: var(--ease-out);
+  --t-bar: calc(900ms * var(--mk)); --t-stagger: calc(60ms * var(--mk)); --t-fade: calc(.4s * var(--mk)); --t-hover: calc(200ms * var(--mk));
+  /* layout — 1440 grid: 16 | toc 234 | wide 353 | main 688 | 133 | 16 */
+  --hdr-h: 56px;
+  --pad: 16px;
+  --maxw: 1440px;
+}
+[data-theme="dark"] {
+  --bg: #0A0A0A;
+  --surface: #121212;
+  --surface-2: #1A1A1A;
+  --ink: #F4F2EE;
+  --ink-2: #E4E2DE;
+  --muted: #9E9C98;
+  --faint: #6B6A67;
+  --rule: #262626;
+  --rule-strong: #F4F2EE;
+  --accent-deep: #E2CFFF;
+  --pos-ink: #D9C2FF;
+  --neg-ink: #FF8E66;
+  --primary-text: #FF8E66;
+  --context: #2B2A28;
+  --line: #F4F2EE;
+  --area-op: .88;
+  --tip-bg: #F4F2EE; --tip-ink: #000000;
+  --heat-lo: #1A1A1A; --heat-mid: #6A3FD0; --heat-hi: #CDABFE; --heat-ink-hi: #000000;
+  --footer-bg: #000000; --footer-ink: #F4F2EE;
+  --c5: #F4F2EE; --c7: #9FB3A4; --c8: #8F8780;
+}
+/*__THEME__*/
+
+/* ===================================================================== */
+/* Base                                                                   */
+/* ===================================================================== */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: 120px; overflow-x: clip; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 400 calc(var(--fs-body) * 1px)/1.4 var(--sans); letter-spacing: -.01em;
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  transition: background-color calc(.3s * var(--mk)) var(--ease-io), color calc(.3s * var(--mk)) var(--ease-io);
+}
+.tnum { font-variant-numeric: tabular-nums; }
+button, input, select { font: inherit; color: inherit; letter-spacing: inherit; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+a { color: inherit; text-underline-offset: 3px; text-decoration-thickness: 1px; transition: color calc(.2s * var(--mk)) var(--ease-io); }
+.kicker, .mono { font: 400 12px/1.2 var(--mono); letter-spacing: .02em; text-transform: uppercase; margin: 0; }
+.page { max-width: var(--maxw); margin: 0 auto; }
+/* the 6-column editorial grid used by hero, band, sections and table */
+.g {
+  display: grid; column-gap: 0;
+  grid-template-columns: [full-start] var(--pad) [toc-start] minmax(0, 234fr) [wide-start] minmax(0, 353fr) [main-start] minmax(0, 688fr) [main-end] minmax(0, 133fr) [content-end] var(--pad) [full-end];
+}
+.g > * { grid-column: main-start / main-end; min-width: 0; }
+
+/* Header — black brand block | orange segment | white nav. Hides on scroll down, returns on scroll up. */
+.hdr {
+  position: fixed; inset: 0 0 auto 0; z-index: 50; height: var(--hdr-h);
+  display: grid; grid-template-columns: auto minmax(0, calc(41.875vw - 160px)) 1fr; align-items: stretch;
+  background: var(--bg); transform: translateY(0); overflow: hidden; max-width: 100vw; transition: transform calc(.5s * var(--mk)) var(--ease-out), background-color calc(.3s * var(--mk)) var(--ease-io);
+}
+html.hdr-hidden .hdr { transform: translateY(-100%); }
+.hdr .brand { background: var(--brand-bg); color: var(--brand-ink); display: flex; align-items: center; gap: 10px; padding: 0 16px; font: var(--hw) 22px/1 var(--heading); letter-spacing: calc(-.05em * var(--track)); white-space: nowrap; min-width: 160px; }
+.hdr .brand .badge { font: 400 10.5px/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; padding: 4px 6px; border: 1px solid color-mix(in srgb, var(--brand-ink) 45%, transparent); color: color-mix(in srgb, var(--brand-ink) 80%, transparent); }
+.hdr .brand img.logo { display: block; height: var(--logo-h, 26px); width: auto; max-width: 180px; }
+.hdr .seg-o { background: var(--hero); color: var(--hero-ink); display: flex; align-items: center; justify-content: flex-end; padding: 0 16px; }
+.hdr .nav { display: flex; align-items: center; justify-content: flex-end; gap: clamp(20px, 3.6vw, 52px); padding: 0 16px; }
+.navbtn { border: 0; background: none; padding: 6px 0; cursor: pointer; font: 500 18px/1 var(--sans); letter-spacing: -.03em; display: inline-flex; align-items: center; gap: 8px; color: inherit; transition: opacity calc(.2s * var(--mk)) var(--ease-io); }
+.navbtn:hover { opacity: .6; }
+.navbtn .plus { width: 12px; height: 12px; position: relative; display: inline-block; transition: transform calc(.4s * var(--mk)) var(--ease-out); }
+.navbtn .plus::before, .navbtn .plus::after { content: ""; position: absolute; background: currentColor; left: 0; top: 5.5px; width: 12px; height: 1.2px; }
+.navbtn .plus::after { transform: rotate(90deg); }
+.navbtn[aria-expanded="true"] .plus { transform: rotate(45deg); }
+.navbtn svg { width: 16px; height: 16px; }
+.hdr .seg-o .navbtn .short { display: none; }
+
+/* Chapter menu — orange panel that drops from the top-left */
+.menu { position: fixed; z-index: 70; inset: 0 auto 0 0; width: max(41.875vw, 380px); background: var(--hero); color: var(--hero-ink);
+  display: flex; flex-direction: column; padding: 0 16px 20px; transform: translateY(-100%); visibility: hidden;
+  transition: transform calc(.7s * var(--mk)) var(--ease-out), visibility calc(0s * var(--mk)) linear calc(.7s * var(--mk)); }
+.menu.open { transform: none; visibility: visible; transition: transform calc(.7s * var(--mk)) var(--ease-out), visibility calc(0s * var(--mk)); }
+.menu .mtop { height: var(--hdr-h); display: flex; align-items: center; justify-content: space-between; font: 500 18px/1 var(--sans); letter-spacing: -.03em; flex: none; }
+.menu .mtop button { border: 0; background: none; cursor: pointer; font-size: 22px; line-height: 1; padding: 4px; color: inherit; }
+.menu ol { list-style: none; margin: auto 0 0; padding: 0; overflow: auto; }
+.menu li a { display: flex; align-items: flex-start; gap: 10px; text-decoration: none; border-bottom: 1px solid var(--hero-ink); padding: 10px 12px 12px; font: var(--hw) clamp(30px, 3.9vw, 56px)/1 var(--heading); letter-spacing: calc(-.05em * var(--track)); transition: opacity calc(.2s * var(--mk)) var(--ease-io); }
+.menu li a sup { font: 400 13px/1 var(--sans); letter-spacing: 0; padding-top: 6px; }
+.menu ol:hover a { opacity: .45; } .menu ol a:hover { opacity: 1; }
+.menu .mfoot { margin-top: 16px; padding: 0 12px; font: 400 11px/1.3 var(--mono); text-transform: uppercase; }
+.scrim { position: fixed; inset: 0; z-index: 65; background: rgba(0,0,0,.25); opacity: 0; pointer-events: none; transition: opacity calc(.5s * var(--mk)) var(--ease-io); }
+.scrim.on { opacity: 1; pointer-events: auto; }
+
+/* Hero — full-bleed orange, mono kicker, huge tight headline, meta bottom-right.
+   On load it opens at full viewport height and settles to its natural height. */
+.hero { background: var(--hero); color: var(--hero-ink); padding-top: var(--hdr-h); }
+.hero .g { min-height: clamp(380px, 54vh, 560px); align-content: end; padding-bottom: 18px; transition: min-height calc(1.1s * var(--mk)) var(--ease-out); }
+html.intro .hero .g { min-height: calc(100svh - 0px); }
+.hero .kicker { grid-column: toc-start / content-end; margin-bottom: 14px; }
+.hero h1.title { grid-column: toc-start / content-end; font: var(--hw) clamp(calc(var(--fs-hero) * .4px), calc(var(--fs-hero) * .0695vw), calc(var(--fs-hero) * 1px))/var(--lh-hero) var(--heading); letter-spacing: calc(-.06em * var(--track)); margin: 0; max-width: 12.5em; text-wrap: balance; }
+.hero .byline { grid-column: toc-start / content-end; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 24px; margin-top: 18px; font-size: 14px; color: var(--hero-muted); }
+.hero .byline b { color: var(--hero-ink); font-weight: 400; }
+.hero .byline .mob-only { display: none; }
+
+/* Art strip — data-driven dot matrix under the hero (theme: hero.art) */
+.art { position: relative; height: clamp(180px, 22vw, 320px); background: var(--art-bg); overflow: hidden; display: grid; grid-template-columns: 41.875% 1fr; }
+.art canvas { width: 100%; height: 100%; display: block; clip-path: inset(0 0 0 0); transition: clip-path calc(1.6s * var(--mk)) var(--ease-out) calc(.35s * var(--mk)); }
+html.intro .art canvas { clip-path: inset(0 100% 0 0); }
+.art .art-r { background: var(--hero); position: relative; }
+
+/* Orange statement + KPI band */
+.band { background: var(--hero); color: var(--hero-ink); padding: 0 0 calc(var(--sp-band) * 1px); }
+.band .g { row-gap: 0; }
+.band .rule { grid-column: toc-start / content-end; border-top: 1px solid var(--hero-rule); height: 0; margin-bottom: 18px; }
+.band .dek { grid-column: toc-start / wide-end; grid-row: 2 / span 2; font: var(--hw) clamp(calc(var(--fs-dek) * .75px), calc(var(--fs-dek) * .0697vw), calc(var(--fs-dek) * 1px))/1.2 var(--heading); letter-spacing: calc(-.03em * var(--track)); margin: 0 24px 32px 0; max-width: 15em; text-wrap: pretty; }
+.band .dek b { font-weight: 500; }
+.band #kpis { grid-column: main-start / content-end; grid-row: 2; }
+.band #insights { grid-column: main-start / main-end; grid-row: 3; padding-top: 44px; }
+.kpi-grid { display: grid; grid-template-columns: repeat(var(--kcols, 3), minmax(0, 1fr)); border-bottom: 1px solid var(--hero-rule); }
+.kpi { padding: 12px 12px 18px 16px; border-left: 1px solid var(--hero-rule); min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+.kpi.t { border-top: 1px solid var(--hero-rule); }
+.kpi .value { order: 1; font: var(--hw) var(--kv, 85px)/1 var(--heading); letter-spacing: calc(-.04em * var(--track)); margin: 0 0 clamp(24px, 4vw, 64px); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kpi .label { order: 2; font: var(--hw) calc(var(--fs-label) * 1px)/1.2 var(--heading); letter-spacing: calc(-.03em * var(--track)); }
+.kpi .delta { order: 3; margin-top: 8px; font-size: 16px; color: var(--hero-muted); font-variant-numeric: tabular-nums; display: flex; flex-wrap: wrap; gap: 0 6px; }
+.kpi .delta .arr { color: var(--hero-ink); }
+.kpi .delta.good .arr, .kpi .delta.bad .arr { font-size: 12px; transform: translateY(-1px); display: inline-block; }
+.kpi svg.spark { order: 4; display: block; width: 100%; height: 26px; margin-top: 14px; overflow: visible; }
+.insights .kicker { margin-bottom: 18px; }
+.insights ol { list-style: none; margin: 0; padding: 0; columns: 2 300px; column-gap: 24px; }
+.insights li { break-inside: avoid; margin: 0 0 20px; font-size: 16px; line-height: 1.4; }
+.insights .n { font: 400 12px/1 var(--mono); display: block; margin-bottom: 6px; }
+.insights h3 { display: inline; font: 500 16px/1.4 var(--sans); margin: 0; }
+.insights h3::after { content: " "; }
+.insights li p { display: inline; margin: 0; }
+.insights b { font-weight: 500; font-variant-numeric: tabular-nums; }
+.insights .scope { font-size: 13px; color: var(--hero-muted); margin: 8px 0 0; }
+
+/* Filter bar (sticky under the header; slides up with it) ---------------- */
+.filterbar {
+  position: sticky; top: var(--hdr-h); z-index: 40; background: var(--bg);
+  border-bottom: var(--rule-w) solid var(--rule); transition: top calc(.5s * var(--mk)) var(--ease-out), background-color calc(.3s * var(--mk)) var(--ease-io);
+}
+html.hdr-hidden .filterbar { top: 0; }
+.filterbar .inner { max-width: var(--maxw); margin: 0 auto; display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 10px var(--pad); flex-wrap: wrap; }
+.fb-label { font: 400 12px/1 var(--mono); text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+.seg { display: inline-flex; gap: 2px; }
+.seg button { border: 1px solid transparent; background: transparent; padding: 0 12px; height: 32px; border-radius: 999px; font-size: 14px; font-weight: 500; color: var(--muted); cursor: pointer; transition: background var(--t-hover) ease, color var(--t-hover) ease; }
+.seg button:hover { color: var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.dd { position: relative; }
+.dd > button { height: 32px; padding: 0 12px; border-radius: 999px; border: var(--rule-w) solid var(--rule); background: var(--surface); cursor: pointer; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 7px; transition: border-color var(--t-hover) ease; }
+.dd > button:hover, .dd.open > button { border-color: var(--ink); }
+.dd > button .count { background: var(--accent); color: var(--accent-ink); border-radius: 999px; font-size: 11px; padding: 2px 7px; font-weight: 500; }
+.dd > button .count[hidden] { display: none; }
+.dd > button svg { width: 12px; height: 12px; opacity: .6; transition: transform calc(.3s * var(--mk)) var(--ease-out); }
+.dd.open > button svg { transform: rotate(180deg); }
+.dd.active > button { border-color: var(--ink); }
+.dd.daterange > button { font-variant-numeric: tabular-nums; }
+.panel { position: absolute; top: calc(100% + 8px); left: 0; width: 280px; max-height: 380px; display: none; flex-direction: column; background: var(--surface); border: 1px solid var(--ink); overflow: hidden; animation: pop calc(.35s * var(--mk)) var(--ease-out); }
+.dd.open .panel { display: flex; }
+@keyframes pop { from { opacity: 0; transform: translateY(-6px); } }
+.panel input[type=search] { margin: 10px; padding: 8px 10px; border: var(--rule-w) solid var(--rule); background: var(--bg); font-size: 14px; border-radius: 0; }
+.panel .opts { overflow: auto; padding: 0 0 6px; }
+.panel label { display: flex; align-items: center; gap: 10px; padding: 7px 12px; font-size: 14px; cursor: pointer; transition: background var(--t-hover) ease; }
+.panel label:hover { background: var(--surface-2); }
+.panel label .n { margin-left: auto; color: var(--muted); font: 400 12px/1 var(--mono); }
+.panel input[type=checkbox] { accent-color: var(--ink); width: 14px; height: 14px; }
+.panel .foot { display: flex; justify-content: space-between; padding: 10px 12px; border-top: var(--rule-w) solid var(--rule); font-size: 13px; }
+.panel .foot button { border: 0; background: none; cursor: pointer; font-weight: 500; padding: 0; text-decoration: underline; text-underline-offset: 3px; }
+.dd.daterange .panel { padding: 12px; gap: 10px; }
+.dd.daterange label { display: grid; gap: 6px; font: 400 12px/1 var(--mono); text-transform: uppercase; color: var(--muted); padding: 0; }
+.dd.daterange label:hover { background: none; }
+.dd.daterange input { border: var(--rule-w) solid var(--rule); background: var(--bg); padding: 8px 9px; font: 400 14px/1 var(--sans); text-transform: none; color: var(--ink); font-variant-numeric: tabular-nums; }
+[data-theme="dark"] .dd.daterange input { color-scheme: dark; }
+.dd.daterange .apply { height: 34px; border: 0; border-radius: 999px; background: var(--ink); color: var(--bg); font-weight: 500; font-size: 14px; cursor: pointer; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px 0 12px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 13px; font-weight: 500; border: 0; cursor: pointer; animation: pop calc(.35s * var(--mk)) var(--ease-out); }
+.chip i { font-style: normal; opacity: .6; font-weight: 400; }
+.chip span.x { width: 16px; height: 16px; display: inline-grid; place-items: center; border-radius: 50%; transition: background var(--t-hover) ease; }
+.chip:hover span.x { background: color-mix(in srgb, var(--accent-ink) 14%, transparent); }
+.fb-right { margin-left: auto; display: flex; align-items: center; gap: 16px; font-size: 13px; color: var(--muted); }
+.fb-right .count-txt { font: 400 12px/1 var(--mono); }
+.linkbtn { border: 0; background: none; color: var(--ink); cursor: pointer; font-weight: 500; font-size: 14px; padding: 0; text-decoration: underline; text-underline-offset: 3px; }
+.linkbtn[hidden] { display: none; }
+
+/* Sticky chapter TOC (left), active item gets the "——" line ------------- */
+.toc { position: fixed; left: var(--pad); top: 50%; z-index: 30; transform: translateY(-50%); width: 210px; opacity: 0; pointer-events: none; transition: opacity calc(.4s * var(--mk)) ease; }
+.toc.on { opacity: 1; pointer-events: auto; }
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc a { display: flex; align-items: center; text-decoration: none; font-size: 14px; line-height: 1.4; padding: 2px 0 2px; color: var(--muted); letter-spacing: -.01em; transition: color calc(.2s * var(--mk)) var(--ease-io); }
+.toc a::before { content: ""; height: 1px; background: currentColor; width: 0; margin-right: 0; flex: none; transition: width calc(.35s * var(--mk)) var(--ease-out), margin calc(.35s * var(--mk)) var(--ease-out); }
+.toc a:hover, .toc a.active { color: var(--ink); }
+.toc a:hover::before, .toc a.active::before { width: 22px; margin-right: 12px; }
+.toc .prog { margin-top: 10px; height: 1px; background: var(--rule); position: relative; overflow: hidden; }
+.toc .prog i { position: absolute; inset: 0; background: var(--ink); transform-origin: left; transform: scaleX(var(--p, 0)); transition: transform calc(.2s * var(--mk)) linear; }
+@media (max-width: 1099px) { .toc { display: none; } }
+
+/* Sections & charts ----------------------------------------------------- */
+.section { padding-top: clamp(calc(var(--sp-section) * .53px), calc(var(--sp-section) * .0667vw), calc(var(--sp-section) * 1px)); }
+.section .sec-rule { grid-column: toc-start / content-end; border-top: var(--rule-section-w) solid var(--rule-strong); margin-bottom: 18px; }
+.section .sec-kicker { grid-column: toc-start / wide-end; grid-row: 2; padding-top: 10px; }
+.section-head { grid-row: 2; margin-bottom: 44px; }
+.section-head h2 { font: var(--hw) clamp(calc(var(--fs-h2) * .75px), calc(var(--fs-h2) * .07vw), calc(var(--fs-h2) * 1px))/1.1 var(--heading); letter-spacing: calc(-.04em * var(--track)); margin: 0; text-wrap: balance; }
+.section-head .q { font-size: 20px; line-height: 1.3; letter-spacing: -.02em; color: var(--muted); margin: 14px 0 0; }
+.section-head .lede { margin: 28px 0 0; font-size: 16px; line-height: 1.4; max-width: 34em; text-wrap: pretty; }
+.section-head .lede b { font-weight: 500; font-variant-numeric: tabular-nums; }
+.grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: calc(var(--sp-chart) * 1px) 40px; }
+.grid.wide { grid-column: wide-start / content-end; }
+.chart { margin: 0; grid-column: span 12; min-width: 0; }
+.chart.half { grid-column: span 6; } .chart.third { grid-column: span 4; } .chart.twothirds { grid-column: span 8; }
+@media (max-width: 1240px) { .grid { column-gap: 0; } .chart.half, .chart.third, .chart.twothirds { grid-column: span 12; } .grid.wide { grid-column: main-start / content-end; } }
+.chart figcaption { border-bottom: var(--rule-strong-w) solid var(--rule-strong); padding-bottom: 14px; }
+.chart figcaption h3 { font: var(--hw) calc(var(--fs-chart) * 1px)/1.05 var(--heading); letter-spacing: calc(-.04em * var(--track)); margin: 0; max-width: 70%; text-wrap: balance; }
+.chart.half figcaption h3, .chart.third figcaption h3 { max-width: 92%; }
+.chart figcaption p { margin: 10px 0 0; font-size: 14px; line-height: 1.35; color: var(--muted); max-width: 46em; }
+.chart .viz { margin-top: 14px; position: relative; min-height: 60px; }
+.chart .viz svg { overflow: visible; }
+.chart .note { margin: 14px 0 0; font-size: 14px; color: var(--muted); }
+.chart .hint { font: 400 11px/1.3 var(--mono); text-transform: uppercase; color: var(--faint); margin-top: 12px; letter-spacing: .02em; }
+.empty { padding: 28px 0; color: var(--muted); font-size: 14px; }
+.fade { animation: fadein calc(.3s * var(--mk)) ease; }
+@keyframes fadein { from { opacity: .3; } }
+
+/* Reveal states. JS adds .in when a block scrolls into view (once). */
+.rv { opacity: 0; transform: translateY(24px); transition: opacity calc(.9s * var(--mk)) var(--ease-out), transform calc(.9s * var(--mk)) var(--ease-out); }
+.rv.in { opacity: 1; transform: none; }
+.chart figcaption { transition: opacity calc(.7s * var(--mk)) var(--ease-out), transform calc(.7s * var(--mk)) var(--ease-out); }
+.chart:not(.in) figcaption { opacity: 0; transform: translateY(16px); }
+/* Plot SVG entry: lines/areas wipe in, bars grow from the baseline, dots pop, cells and labels fade */
+.chart svg [aria-label="line"], .chart svg [aria-label="area"] { clip-path: inset(-24px -24px -24px -24px); transition: clip-path calc(1.5s * var(--mk)) var(--ease-out) calc(.15s * var(--mk)); }
+.chart:not(.in) svg [aria-label="line"], .chart:not(.in) svg [aria-label="area"] { clip-path: inset(-24px 100% -24px -24px); }
+.chart svg [aria-label="bar"] rect, .chart svg [aria-label="rect"] rect { transform-box: fill-box; transform-origin: left center; transition: transform var(--t-bar) var(--ease-out) var(--d, calc(0ms * var(--mk))); }
+.chart svg [aria-label="rect"] rect { transform-origin: center bottom; }
+.chart svg [aria-label="bar"] rect.neg { transform-origin: right center; }
+.chart:not(.in) svg [aria-label="bar"] rect { transform: scaleX(0); }
+.chart:not(.in) svg [aria-label="rect"] rect { transform: scaleY(0); }
+.chart svg [aria-label="dot"] circle { transform-box: fill-box; transform-origin: center; transition: transform calc(.7s * var(--mk)) var(--ease-out) var(--d, calc(0ms * var(--mk))); }
+.chart:not(.in) svg [aria-label="dot"] circle { transform: scale(0); }
+.chart svg [aria-label="cell"] rect { transition: opacity calc(.6s * var(--mk)) ease var(--d, calc(0ms * var(--mk))); }
+.chart:not(.in) svg [aria-label="cell"] rect { opacity: 0; }
+.chart svg [aria-label="text"], .chart svg [aria-label="rule"] { transition: opacity var(--t-fade) ease calc(.75s * var(--mk)); }
+.chart:not(.in) svg [aria-label="text"], .chart:not(.in) svg [aria-label="rule"] { opacity: 0; }
+.chart svg [aria-label*="axis"], .chart svg [aria-label*="grid"] { transition: opacity calc(.6s * var(--mk)) ease; }
+.chart:not(.in) svg [aria-label*="axis"], .chart:not(.in) svg [aria-label*="grid"] { opacity: 0; }
+.chart svg [aria-label="tip"] text, .chart svg [aria-label="tip"] tspan { fill: var(--tip-ink); }
+
+/* HTML bar list — label above a flat 16px bar, value riding the bar end */
+.bars { display: grid; }
+.bar { display: block; width: 100%; padding: 12px 0 0; margin: 0; border: 0; background: none; text-align: left; cursor: pointer; position: relative; transition: background var(--t-hover) ease; }
+.bar::before { content: ""; position: absolute; inset: 0; background: var(--surface-2); opacity: 0; transition: opacity var(--t-hover) ease; z-index: -1; }
+.bars { position: relative; z-index: 0; }
+.bar:hover::before { opacity: 1; }
+.bar .head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; min-width: 0; }
+.bar .lbl { font-size: 15px; font-weight: 500; letter-spacing: -.015em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color var(--t-hover) ease; }
+.bar .dl { font-size: 13px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bar .track { display: block; position: relative; height: 16px; padding-right: 116px; }
+.bar .track::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; border-bottom: var(--rule-w) solid var(--rule); }
+.bar .lane { display: block; position: relative; height: 100%; }
+.bar .fill { position: absolute; top: 0; bottom: 0; left: 0; width: var(--w); background: var(--accent); z-index: 1; transition: width var(--t-bar) var(--ease-out) var(--d, calc(0ms * var(--mk))), background var(--t-hover) ease; }
+.chart:not(.in) .bar .fill { width: 0; }
+.bar .val { position: absolute; left: calc(100% + 8px); top: 50%; transform: translateY(-50%); font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; letter-spacing: -.02em; transition: opacity var(--t-fade) ease calc(var(--d, calc(0ms * var(--mk))) + calc(520ms * var(--mk))); }
+.bar .val small { color: var(--muted); margin-left: 6px; font-size: 13px; font-weight: 400; }
+.chart:not(.in) .bar .val { opacity: 0; }
+.bar .prev { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--ink); z-index: 2; transition: opacity var(--t-fade) ease calc(.6s * var(--mk)); }
+.chart:not(.in) .bar .prev { opacity: 0; }
+.bars.has-sel .bar:not(.sel) .fill { background: var(--context); }
+.bars.has-sel .bar:not(.sel) .lbl { color: var(--muted); }
+.bar.other { cursor: default; } .bar.other .fill { background: var(--context); } .bar.other .lbl { color: var(--muted); }
+.bar.other:hover::before { opacity: 0; }
+.legend-inline { display: flex; gap: 8px 20px; font-size: 14px; margin-bottom: 4px; flex-wrap: wrap; align-items: center; }
+.legend-inline i { display: inline-block; width: 14px; height: 14px; vertical-align: -2px; margin-right: 8px; }
+.legend-inline i.tick { width: 2px; height: 14px; background: var(--ink); }
+
+/* Columns — big numbers over tall flat columns (company-size style) */
+.viz .cols { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); height: var(--hgt, 360px); }
+.col { overflow: hidden; position: relative; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; padding: 0; margin: 0; border: 0; border-left: var(--rule-w) solid var(--rule); background: none; text-align: left; cursor: pointer; min-width: 0; }
+.col .lbl { position: absolute; top: 0; left: 10px; right: 6px; font-size: 15px; font-weight: 500; letter-spacing: -.015em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.col .num { font: var(--hw) var(--num, 48px)/1 var(--heading); letter-spacing: calc(-.045em * var(--track)); padding: 0 0 8px 10px; font-variant-numeric: tabular-nums; white-space: nowrap; transition: opacity var(--t-fade) ease calc(var(--d, calc(0ms * var(--mk))) + calc(520ms * var(--mk))); }
+.col .num small { display: block; font: 400 13px/1.2 var(--sans); letter-spacing: 0; color: var(--muted); margin-top: 6px; }
+.col .fill { height: var(--h); background: var(--accent); margin-right: 3px; transition: height var(--t-bar) var(--ease-out) var(--d, calc(0ms * var(--mk))), background var(--t-hover) ease; }
+.chart:not(.in) .col .fill { height: 0; }
+.chart:not(.in) .col .num { opacity: 0; }
+.col.other { cursor: default; } .col.other .fill { background: var(--context); } .col.other .lbl { color: var(--muted); }
+.cols.wrapnum .col .num { white-space: normal; padding-right: 4px; }
+.cols.wrapnum .col .num small { font-size: 11px; }
+.col:not(.other):hover .fill { background: color-mix(in srgb, var(--accent) 82%, var(--ink)); }
+.cols.has-sel .col:not(.sel) .fill { background: var(--context); }
+.cols.has-sel .col:not(.sel) .num { color: var(--muted); }
+
+/* Part-to-whole strip (use instead of pies) */
+.share .pcts { position: relative; height: 20px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.share .pcts span { position: absolute; bottom: 4px; white-space: nowrap; transition: opacity var(--t-fade) ease calc(calc(.6s * var(--mk)) + var(--d, calc(0ms * var(--mk)))); }
+.chart:not(.in) .share .pcts span { opacity: 0; }
+.share .strip { display: flex; height: 120px; clip-path: inset(0 0 0 0); transition: clip-path calc(1.2s * var(--mk)) var(--ease-out); }
+.chart:not(.in) .share .strip { clip-path: inset(0 100% 0 0); }
+.share .seg-s { min-width: 2px; cursor: pointer; transition: opacity var(--t-hover) ease, filter var(--t-hover) ease; }
+.share .seg-s:hover { filter: brightness(.94); }
+.share.has-sel .seg-s:not(.sel), .share.has-sel .labels div:not(.sel), .share.has-sel .pcts span:not(.sel) { opacity: .28; }
+.share .labels { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 14px; }
+.share .labels div { font-size: 14px; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; transition: opacity var(--t-hover) ease; }
+.share .labels i { width: 14px; height: 14px; flex: none; }
+.share .labels small { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+/* Small multiples */
+.multiples { display: grid; gap: 36px 28px; }
+.multiple { border-top: var(--rule-w) solid var(--rule); padding-top: 10px; transition: opacity var(--t-hover) ease; }
+.multiple h4 { margin: 0; font-size: 15px; font-weight: 500; letter-spacing: -.015em; display: flex; justify-content: space-between; gap: 8px; cursor: pointer; }
+.multiple h4 span { font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
+.multiple .ch { font-size: 13px; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.multiples.has-sel .multiple:not(.sel) { opacity: .35; }
+
+/* Survey charts (likert · nps · themes) ----------------------------------- */
+.small-badge { font: 400 10.5px/1 var(--mono); font-style: normal; letter-spacing: .03em; text-transform: uppercase; color: var(--muted); border: 1px dashed var(--muted); padding: 3px 5px; white-space: nowrap; border-radius: var(--radius); }
+.legend-inline i.dot { width: 11px; height: 11px; border-radius: 50%; border: 1.25px solid var(--ink); }
+.legend-inline i.dot.hollow { background: var(--bg); border: 1.25px dashed var(--muted); }
+.legend-inline i.ci-band { opacity: .35; width: 22px; height: 12px; }
+.sig-legend { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.lk, .np, .th { display: grid; position: relative; z-index: 0; }
+.lk-legend { margin-bottom: 12px; }
+.lk-row, .np-row { display: grid; grid-template-columns: minmax(0, 26%) minmax(0, 1fr); align-items: center; gap: 16px; padding: 9px 0; border: 0; border-bottom: var(--rule-w) solid var(--rule); background: none; text-align: left; width: 100%; cursor: pointer; position: relative; color: inherit; }
+.np-row { grid-template-columns: minmax(0, 26%) minmax(0, 1fr) 104px; }
+.lk-row::before, .np-row::before { content: ""; position: absolute; inset: 0; background: var(--surface-2); opacity: 0; transition: opacity var(--t-hover) ease; z-index: -1; }
+button.lk-row:hover::before, button.np-row:hover::before { opacity: 1; }
+.lk-row.all, .np-row.all { cursor: default; border-bottom: var(--rule-strong-w) solid var(--rule-strong); padding: 12px 0; }
+.lk-row.all .lbl, .np-row.all .lbl { font-weight: 600; }
+.lk-lab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; }
+.lk-lab .lbl { font-size: 15px; font-weight: 500; letter-spacing: -.015em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.lk-lab .n { font: 400 12px/1.2 var(--mono); color: var(--muted); }
+.lk-bar { position: relative; height: 24px; display: block; }
+.lk-track { position: absolute; left: 44px; right: 44px; top: 0; bottom: 0; }
+.lk-track::after { content: ""; position: absolute; left: 50%; top: -5px; bottom: -5px; border-left: 1.25px solid var(--ink); }
+.lk-side { position: absolute; top: 0; bottom: 0; display: flex; transition: transform var(--t-bar) var(--ease-out) var(--d, 0ms); }
+.lk-side.neg { right: 50%; transform-origin: right center; }
+.lk-side.pos { left: 50%; transform-origin: left center; }
+.chart:not(.in) .lk-side { transform: scaleX(0); }
+.lk-side i, .np-bar i, .th-bands i { display: flex; align-items: center; justify-content: center; font: 500 12px/1 var(--sans); font-style: normal; font-variant-numeric: tabular-nums; min-width: 0; overflow: hidden; white-space: nowrap; }
+.lk-side.neg i:first-child { border-radius: var(--radius) 0 0 var(--radius); } .lk-side.pos i:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
+.lk-tot { position: absolute; top: 50%; transform: translateY(-50%); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; transition: opacity var(--t-fade) ease calc(var(--d, 0ms) + 520ms * var(--mk)); }
+.chart:not(.in) .lk-tot { opacity: 0; }
+.lk.has-sel .lk-row:not(.sel):not(.all), .np.has-sel .np-row:not(.sel):not(.all), .th.has-sel .th-row:not(.sel) { opacity: .4; }
+/* small samples: always shown, drawn lighter and hatched, with a badge */
+.lk-row.small .lk-side, .np-row.small .np-bar, .th-row.small .th-bands { opacity: .55; }
+.lk-row.small .lk-track::before, .np-row.small .np-bar::after, .th-row.small .th-bands::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background: repeating-linear-gradient(135deg, transparent 0 4px, color-mix(in srgb, var(--bg) 70%, transparent) 4px 6px); }
+.np-bar { position: relative; display: flex; height: 24px; border-radius: var(--radius); overflow: hidden; clip-path: inset(0 0 0 0); transition: clip-path calc(1.1s * var(--mk)) var(--ease-out) var(--d, 0ms); }
+.chart:not(.in) .np-bar { clip-path: inset(0 100% 0 0); }
+.np-val { display: flex; align-items: baseline; justify-content: flex-end; gap: 6px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.np-val b { font: var(--hw) 26px/1 var(--heading); letter-spacing: calc(-.04em * var(--track)); }
+.np-val small { font-size: 12px; color: var(--muted); }
+.np-mark { font-size: 11px; }
+.th-head, .th-main { display: grid; grid-template-columns: minmax(0, 32%) minmax(0, 22%) minmax(0, 1fr) 76px; gap: 16px; align-items: center; }
+.th-head { font: 400 12px/1.2 var(--mono); text-transform: uppercase; color: var(--muted); padding-bottom: 8px; border-bottom: var(--rule-strong-w) solid var(--rule-strong); }
+.th-head .r { text-align: right; }
+.th > .legend-inline { margin: 10px 0 2px; font-size: 13px; }
+.th-row { border-bottom: var(--rule-w) solid var(--rule); padding: 12px 0; position: relative; transition: opacity var(--t-hover) ease; }
+.th-row.other .th-name b { color: var(--muted); font-weight: 500; }
+.th-main { width: 100%; border: 0; background: none; padding: 0; text-align: left; cursor: pointer; color: inherit; position: relative; }
+.th-main::before { content: ""; position: absolute; inset: -6px 0; background: var(--surface-2); opacity: 0; transition: opacity var(--t-hover) ease; z-index: -1; }
+.th-main:hover::before { opacity: 1; }
+.th-name { display: flex; flex-direction: column; gap: 3px; min-width: 0; align-items: flex-start; }
+.th-name b { font: var(--hw) 17px/1.2 var(--heading); letter-spacing: calc(-.02em * var(--track)); }
+.th-name small { font-size: 12.5px; color: var(--muted); }
+.th-count { display: grid; gap: 5px; }
+.th-share { display: block; height: 8px; background: var(--surface-2); position: relative; overflow: hidden; border-radius: var(--radius); }
+.th-share i { position: absolute; inset: 0 auto 0 0; background: var(--accent); transition: width var(--t-bar) var(--ease-out) var(--d, 0ms); }
+.chart:not(.in) .th-share i { width: 0 !important; }
+.th-count .num { font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; } .th-count .num small { color: var(--muted); font-weight: 400; margin-left: 4px; }
+.th-bands { position: relative; display: flex; height: 22px; border-radius: var(--radius); overflow: hidden; clip-path: inset(0 0 0 0); transition: clip-path calc(1.1s * var(--mk)) var(--ease-out) var(--d, 0ms); }
+.chart:not(.in) .th-bands { clip-path: inset(0 100% 0 0); }
+.th-val { text-align: right; font: var(--hw) 20px/1 var(--heading); font-variant-numeric: tabular-nums; display: flex; justify-content: flex-end; align-items: baseline; gap: 5px; }
+.th-quotes { list-style: none; margin: 10px 0 0; padding: 0 0 0 calc(32% + 16px); display: grid; gap: 6px; font-size: 14px; line-height: 1.4; color: var(--ink-2); }
+.th-quotes li { font-style: italic; } .th-quotes small { font-style: normal; color: var(--muted); font-size: 12px; }
+.th-note { font-size: 12.5px; color: var(--muted); margin: 14px 0 0; }
+/* KPI CI line + table significance markers */
+.kpi .kci { order: 4; margin-top: 6px; font: 400 12px/1.3 var(--mono); color: var(--hero-muted); letter-spacing: .01em; }
+.kpi svg.spark { order: 5; }
+.kpi.small .value { opacity: .7; }
+table.data .tsig { font-size: 10px; margin-left: 3px; } table.data .tsig.good { color: var(--pos-ink); } table.data .tsig.bad { color: var(--neg-ink); }
+table.data td.ci { color: var(--muted); font-size: 13.5px; }
+table.data tr.small td { color: var(--muted); }
+#tt .warn { color: color-mix(in srgb, var(--tip-ink) 85%, transparent); font-size: 12.5px; }
+@media (max-width: 700px) {
+  .lk-row, .np-row { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .np-row { grid-template-columns: minmax(0, 1fr) auto; } .np-row .lk-lab { grid-column: 1 / -1; }
+  .lk-track { left: 34px; right: 34px; }
+  .th-head { display: none; }
+  .th-main { grid-template-columns: minmax(0, 1fr) 64px; gap: 8px 12px; }
+  .th-name { grid-column: 1 / -1; } .th-count { grid-column: 1 / -1; } .th-bands { grid-column: 1; }
+  .th-quotes { padding-left: 0; }
+}
+
+/* Floating tooltip for HTML charts — black slab, white text, square */
+#tt { position: fixed; z-index: 80; pointer-events: none; opacity: 0; transform: translateY(6px); background: var(--tip-bg); color: var(--tip-ink); padding: 10px 12px; font-size: 14px; line-height: 1.4; letter-spacing: -.01em; max-width: 280px; transition: opacity calc(.2s * var(--mk)) ease, transform calc(.3s * var(--mk)) var(--ease-out); font-variant-numeric: tabular-nums; left: 0; top: 0; }
+#tt.on { opacity: 1; transform: none; }
+#tt b { font-weight: 500; }
+#tt .k { opacity: .65; }
+
+/* Data table ------------------------------------------------------------ */
+#table-section .table-tools, #table-section .tscroll, #table-section .pager { grid-column: main-start / content-end; }
+.table-tools { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+.table-tools input[type=search], .table-tools select { height: 36px; border: var(--rule-w) solid var(--rule); background: var(--surface); border-radius: 999px; padding: 0 14px; font-size: 14px; transition: border-color var(--t-hover) ease; }
+.table-tools input[type=search]:hover, .table-tools select:hover, .table-tools input[type=search]:focus { border-color: var(--ink); outline: none; }
+.table-tools input[type=search] { min-width: 200px; flex: 1 1 220px; max-width: 340px; }
+.table-tools .spacer { flex: 1; }
+.pill { height: 36px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--ink); background: transparent; cursor: pointer; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; transition: background var(--t-hover) ease, color var(--t-hover) ease; }
+.pill:hover, .pill.solid { background: var(--ink); color: var(--bg); }
+.pill.solid:hover { opacity: .85; }
+.tscroll { overflow-x: auto; border-top: var(--rule-strong-w) solid var(--rule-strong); -webkit-overflow-scrolling: touch; }
+table.data { width: 100%; border-collapse: collapse; font-size: 15px; font-variant-numeric: tabular-nums; }
+table.data th { text-align: left; font: 400 12px/1.2 var(--mono); text-transform: uppercase; letter-spacing: .02em; color: var(--muted); padding: 12px 12px; border-bottom: var(--rule-w) solid var(--rule); white-space: nowrap; cursor: pointer; user-select: none; background: var(--bg); transition: color calc(.2s * var(--mk)) var(--ease-io); }
+table.data th:hover { color: var(--ink); }
+table.data th.num, table.data td.num { text-align: right; }
+table.data th .arr { opacity: 0; margin-left: 4px; } table.data th.sorted { color: var(--ink); } table.data th.sorted .arr { opacity: 1; }
+table.data td { padding: 10px 12px; border-bottom: var(--rule-w) solid var(--rule); white-space: nowrap; transition: background var(--t-hover) ease; }
+table.data tbody tr:hover td { background: var(--surface-2); }
+table.data td.bar-cell { position: relative; }
+table.data td.bar-cell .db { position: absolute; right: 6px; top: 8px; bottom: 8px; background: var(--accent); opacity: .35; pointer-events: none; }
+.pager { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 0; font-size: 14px; color: var(--muted); flex-wrap: wrap; }
+.pager button { border: var(--rule-w) solid var(--rule); background: var(--surface); border-radius: 999px; height: 32px; padding: 0 14px; cursor: pointer; font-size: 14px; transition: border-color var(--t-hover) ease; }
+.pager button:hover:not(:disabled) { border-color: var(--ink); }
+.pager button:disabled { opacity: .35; cursor: default; }
+
+/* Methodology — black footer -------------------------------------------- */
+.method { margin-top: clamp(80px, 10vw, 140px); padding: 28px 0 72px; background: var(--footer-bg); color: var(--footer-ink); }
+.method .g > .kicker { grid-column: toc-start / content-end; border-bottom: 1px solid color-mix(in srgb, var(--footer-ink) 35%, transparent); padding-bottom: 14px; margin-bottom: 28px; }
+.method .cols { grid-column: toc-start / content-end; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 28px 40px; }
+.method h4 { font: 400 12px/1 var(--mono); letter-spacing: .02em; text-transform: uppercase; color: color-mix(in srgb, var(--footer-ink) 62%, transparent); margin: 0 0 16px; }
+.method ul { margin: 0; padding-left: 18px; font-size: 15px; }
+.method li { margin-bottom: 8px; }
+.method dl { margin: 0; font-size: 15px; }
+.method dt { font-weight: 500; } .method dd { margin: 0 0 12px; color: color-mix(in srgb, var(--footer-ink) 75%, transparent); }
+.method .colophon { grid-column: toc-start / content-end; margin-top: 48px; font-size: 13px; color: color-mix(in srgb, var(--footer-ink) 62%, transparent); }
+.method .bigmark { grid-column: toc-start / content-end; font: var(--hw) clamp(calc(var(--fs-hero) * .4px), calc(var(--fs-hero) * .0695vw), calc(var(--fs-hero) * 1px))/var(--lh-hero) var(--heading); letter-spacing: calc(-.06em * var(--track)); margin: 64px 0 0; color: var(--footer-ink); }
+
+/* Responsive ------------------------------------------------------------ */
+@media (max-width: 1099px) {
+  :root { --pad: 20px; }
+  .g { grid-template-columns: [full-start] var(--pad) [toc-start wide-start main-start] minmax(0, 1fr) [main-end content-end] var(--pad) [full-end]; }
+  .band .dek, .band #kpis, .band #insights, .section .sec-kicker, .section-head { grid-row: auto; }
+  .band .dek { margin: 0 0 32px; }
+  .section .sec-kicker { padding: 0 0 16px; }
+  .section-head { margin-bottom: 36px; }
+  .grid.wide { grid-column: main-start / content-end; }
+  .hdr { grid-template-columns: auto 1fr auto; }
+  .hdr .seg-o { justify-content: flex-start; }
+  .art { grid-template-columns: 1fr; } .art .art-r { display: none; }
+  .menu { width: 100vw; }
+}
+@media (max-width: 700px) {
+  body { font-size: 15px; }
+  .hdr .seg-o .navbtn .long { display: none; } .hdr .seg-o .navbtn .short { display: inline; }
+  .hdr .brand { min-width: 0; font-size: 19px; }
+  .hdr .brand .badge { display: none; }
+  .hero .byline .mob-only { display: inline; font: 400 11px/1.3 var(--mono); text-transform: uppercase; color: var(--hero-ink); }
+  .hdr .nav { gap: 18px; }
+  .hdr .nav .navbtn .txt { display: none; }
+  .hdr .nav { background: var(--hero); color: var(--hero-ink); padding-left: 6px; }
+  .hdr .seg-o { justify-content: flex-end; padding-right: 10px; }
+  .hero .byline { flex-direction: column; justify-content: flex-start; gap: 2px; }
+  .navbtn { font-size: 16px; }
+  .hero .g { min-height: 62svh; }
+  .kpi { padding: 10px 10px 14px 12px; }
+  .kpi .value { margin-bottom: 18px; }
+  .kpi .label { font-size: 18px; }
+  .kpi .delta { font-size: 13px; }
+  .filterbar .inner { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .filterbar .inner::-webkit-scrollbar { display: none; }
+  .filterbar .inner > * { flex: none; }
+  .filterbar .chips { flex-wrap: nowrap; }
+  .fb-label, .fb-right .count-txt { display: none; }
+  .panel { position: fixed; left: 12px; right: 12px; top: 120px; width: auto; }
+  .chart figcaption h3 { font-size: 20px; max-width: none; }
+  .bar .track { padding-right: 92px; }
+  .bar .val small { display: none; }
+  .viz .cols { --hgt: 280px; }
+  .col .lbl { font-size: 13px; left: 6px; white-space: normal; }
+  .col .num { padding-left: 6px; }
+  .share .strip { height: 80px; }
+  .table-tools input[type=search] { max-width: none; }
+  .grid { row-gap: 64px; }
+}
+
+
+/* Theme options ---------------------------------------------------------- */
+.bar .fill { border-radius: 0 var(--radius) var(--radius) 0; }
+.col .fill { border-radius: var(--radius) var(--radius) 0 0; }
+.share .strip { border-radius: var(--radius); overflow: hidden; }
+.panel, #tt, .kpi-grid { border-radius: var(--radius); }
+/* hero.style = "plain": no full-bleed color; the primary color becomes a thick top rule + kicker color */
+html.hero-plain { --hero: var(--bg); --hero-ink: var(--ink); --hero-muted: var(--muted); --hero-rule: var(--rule-strong); }
+html.hero-plain .hero .kicker { color: var(--primary-text); }
+html.hero-plain .band .rule { border-top: 4px solid var(--primary); }
+html.hero-plain .hdr { border-bottom: var(--rule-w) solid var(--rule); }
+html.hero-plain .menu { border-right: var(--rule-w) solid var(--rule-strong); box-shadow: 0 0 0 100vmax rgba(0,0,0,0); }
+html.hero-plain .menu li a { border-bottom-color: var(--rule); }
+/* motion.enabled = false: same as prefers-reduced-motion */
+html.no-motion *, html.no-motion *::before, html.no-motion *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+
+/* Print / Save as PDF --------------------------------------------------- */
+.print-only { display: none; }
+html.print-prep .page, html.print-prep .filterbar .inner { max-width: 760px; }
+html.print-prep .g { grid-template-columns: [full-start] 20px [toc-start wide-start main-start] minmax(0, 1fr) [main-end content-end] 20px [full-end]; }
+html.print-prep .band .dek, html.print-prep .band #kpis, html.print-prep .band #insights, html.print-prep .section .sec-kicker, html.print-prep .section-head { grid-row: auto; }
+html.print-prep .grid { column-gap: 0; }
+html.print-prep .kpi .value { margin-bottom: 14px; } html.print-prep .kpi .label { font-size: 18px; } html.print-prep .band .dek { font-size: 22px; }
+html.print-prep .chart.half, html.print-prep .chart.third, html.print-prep .chart.twothirds { grid-column: span 12; }
+@media print {
+  @page { size: A4; margin: 12mm 10mm; }
+  :root, [data-theme="dark"] { --bg: #fff; --surface: #fff; --surface-2: #f4f3ef; --ink: #000; --ink-2: #111; --muted: #555; --rule: #ddd; --rule-strong: #000; --context: #e2ded8; --footer-bg: #fff; --footer-ink: #000; }
+  body { font-size: 10.5pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .hdr, .menu, .scrim, .toc, .art, .filterbar, .table-tools, .pager, .chart .hint { display: none !important; }
+  .hero { padding-top: 0; } .hero .g { min-height: 0 !important; padding-top: 36px; }
+  .rv { opacity: 1 !important; transform: none !important; }
+  .print-only { display: block; font-size: 9.5pt; color: #333; border: 1px solid #000; padding: 6px 10px; margin: 14px 0 0; grid-column: toc-start / content-end; }
+  .section { padding-top: 26px; }
+  .chart, .kpi, .insights li, .section-head, .bar, .multiple { break-inside: avoid; }
+  .tscroll { overflow: visible; }
+  .method { color: #000; margin-top: 30px; } .method h4, .method dd, .method .colophon { color: #444; }
+  .method .g > .kicker { border-color: #000; } .method .bigmark { display: none; }
+}
+
+/* Reduced motion: every reveal renders in its final state, no transitions */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+}
+</style>
+<script>/*__D3__*/</script>
+<script>/*__PLOT__*/</script>
+<script id="report-data" type="application/json">__REPORT_JSON__</script>
+</head>
+<body>
+<header class="hdr" id="hdr">
+  <div class="brand"><span id="brand"></span><span class="badge" id="sample-badge" hidden></span></div>
+  <div class="seg-o"><button class="navbtn" id="btn-menu" aria-expanded="false" aria-controls="menu"><span class="long" id="menu-label"></span><span class="short">Menu</span><span class="plus" aria-hidden="true"></span></button></div>
+  <nav class="nav">
+    <button class="navbtn" id="btn-theme" aria-label="Tema claro/escuro" title="Tema claro/escuro">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><span class="txt" id="theme-label"></span>
+    </button>
+    <button class="navbtn" id="btn-print" title="PDF">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg><span class="txt">PDF</span>
+    </button>
+  </nav>
+</header>
+<div class="scrim" id="scrim"></div>
+<aside class="menu" id="menu" aria-hidden="true">
+  <div class="mtop"><span id="menu-title"></span><button id="menu-close" aria-label="×">×</button></div>
+  <ol id="menu-list"></ol>
+  <p class="mfoot" id="menu-foot"></p>
+</aside>
+<nav class="toc" id="toc" aria-label="Sumário"><ol></ol><div class="prog"><i></i></div></nav>
+
+<header class="hero">
+  <div class="page g">
+    <p class="kicker" id="kicker"></p>
+    <h1 class="title" id="title"></h1>
+    <div class="byline" id="byline"></div>
+    <div class="print-only" id="print-filters"></div>
+  </div>
+</header>
+
+<nav class="filterbar" aria-label="Filtros"><div class="inner" id="filterbar"></div></nav>
+
+<div class="art" id="art" aria-hidden="true"><canvas id="art-l"></canvas><div class="art-r"><canvas id="art-r"></canvas></div></div>
+
+<section class="band">
+  <div class="page g">
+    <div class="rule"></div>
+    <p class="dek" id="dek"></p>
+    <div class="kpis" id="kpis"></div>
+    <div class="insights" id="insights"></div>
+  </div>
+</section>
+
+<main class="page">
+  <div id="sections"></div>
+  <section class="section g" id="table-section">
+    <div class="sec-rule"></div>
+    <p class="kicker sec-kicker" id="table-kicker"></p>
+    <div class="section-head"><h2 id="table-title"></h2><p class="q" id="table-q"></p></div>
+    <div class="table-tools">
+      <input type="search" id="t-search">
+      <select id="t-group"></select>
+      <span class="spacer"></span>
+      <button class="pill solid" id="t-csv"></button>
+      <button class="pill" id="t-raw"></button>
+    </div>
+    <div class="tscroll"><table class="data" id="t"></table></div>
+    <div class="pager" id="pager"></div>
+  </section>
+</main>
+<footer class="method" id="method"><div class="page g"></div></footer>
+<div id="tt" role="tooltip"></div>
+<script>
+"use strict";
+/* ======================================================================== */
+/* 0. Spec + i18n                                                            */
+/* ======================================================================== */
+const R = JSON.parse(document.getElementById("report-data").textContent);
+const META = R.meta || {};
+const LANG = META.lang || "pt-BR";
+const PT = LANG.toLowerCase().startsWith("pt");
+const T = Object.assign(PT ? {
+  all: "Tudo", "12m": "12 meses", ytd: "No ano", "90d": "90 dias", "30d": "30 dias", "24m": "24 meses",
+  from: "de", to: "até", clear: "Limpar", clearAll: "Limpar filtros", search: "Buscar…", records: "registros", of: "de",
+  vsYoy: "vs. ano anterior", vsPrev: "vs. período anterior", noBase: "sem base de comparação", others: "outros",
+  csvView: "CSV da tabela", csvRaw: "CSV dos dados filtrados", noGroup: "Sem agrupamento (linhas)", groupBy: "Agrupar por",
+  showing: "Mostrando", prev: "Anterior", next: "Próxima", empty: "Sem dados para os filtros atuais.", pp: "p.p.",
+  tableKicker: "Dados", tableTitle: "Explore os números", tableQ: "Busque, ordene e baixe exatamente o recorte filtrado.",
+  methodTitle: "Metodologia e qualidade dos dados", source: "Fonte", period: "Período", generated: "Gerado em",
+  clickHint: "Clique para filtrar · Shift+clique soma à seleção", current: "Atual", peak: "Pico", filtersPrint: "Filtros aplicados",
+  noFilters: "nenhum (todos os dados)", definitions: "Definições", cleaning: "Tratamento", quality: "Qualidade e limites", scope: "Destaques calculados sobre",
+  share: "do total", sample: "Dados de exemplo", avg: "média", median: "mediana", noPrev: "Sem período anterior nos dados para comparar.",
+  highlights: "Destaques", weekOf: "Semana de ", q: "T",
+  menu: "Sumário", menuTitle: "Seções do relatório", dark: "Escuro", light: "Claro", section: "Seção", methodShort: "Metodologia", close: "Fechar",
+  ci: "IC", noTest: "sem teste possível", sigYes: "diferença significativa", sigNo: "dentro da margem de erro, não significativa",
+  sigShort: "significativo", nsShort: "dentro da margem", smallSample: "amostra pequena", ciFrom: "de", ciTo: "a", smallHint: "leitura indicativa: o intervalo é largo",
+  vsRest: "vs. restante da base", restShort: "no restante", overall: "Geral", sigBetter: "melhor que o restante (significativo)", sigWorse: "pior que o restante (significativo)",
+  ns: "sem diferença significativa", detractors: "Detratores", passives: "Neutros", promoters: "Promotores", impact: "Impacto na nota geral",
+  shareAnswers: "Peso nas respostas", ifLikeRest: "Se este grupo tivesse a nota do restante, o geral seria", pullsDown: "puxa a nota para baixo", pullsUp: "puxa a nota para cima",
+  vsPrevPoint: "vs. período anterior", theme: "Tema", commentsCount: "Comentários", commentsWord: "comentários", bandSplit: "Perfil de quem comentou", ofComments: "dos comentários",
+  quotesNote: "Exemplos de comentários do período completo, com dados pessoais removidos; contagens e barras seguem os filtros.", ciCol: "IC", nCol: "n", sampleCol: "Amostra"
+} : {
+  all: "All", "12m": "12 months", ytd: "YTD", "90d": "90 days", "30d": "30 days", "24m": "24 months",
+  from: "from", to: "to", clear: "Clear", clearAll: "Clear filters", search: "Search…", records: "records", of: "of",
+  vsYoy: "vs. last year", vsPrev: "vs. previous period", noBase: "no comparison base", others: "others",
+  csvView: "Table CSV", csvRaw: "Filtered data CSV", noGroup: "No grouping (rows)", groupBy: "Group by",
+  showing: "Showing", prev: "Previous", next: "Next", empty: "No data for the current filters.", pp: "pp",
+  tableKicker: "Data", tableTitle: "Explore the numbers", tableQ: "Search, sort and download exactly the filtered slice.",
+  methodTitle: "Methodology and data quality", source: "Source", period: "Period", generated: "Generated",
+  clickHint: "Click to filter · Shift+click to add", current: "Current", peak: "Peak", filtersPrint: "Applied filters",
+  noFilters: "none (all data)", definitions: "Definitions", cleaning: "Cleaning", quality: "Quality and limits", scope: "Highlights computed over",
+  share: "of total", sample: "Sample data", avg: "average", median: "median", noPrev: "No previous period in the data to compare.",
+  highlights: "Highlights", weekOf: "Week of ", q: "Q",
+  menu: "Contents", menuTitle: "Report sections", dark: "Dark", light: "Light", section: "Section", methodShort: "Methodology", close: "Close",
+  ci: "CI", noTest: "no test possible", sigYes: "significant difference", sigNo: "within the margin of error, not significant",
+  sigShort: "significant", nsShort: "within margin", smallSample: "small sample", ciFrom: "from", ciTo: "to", smallHint: "indicative only: the interval is wide",
+  vsRest: "vs. rest of the base", restShort: "in the rest", overall: "Overall", sigBetter: "better than the rest (significant)", sigWorse: "worse than the rest (significant)",
+  ns: "no significant difference", detractors: "Detractors", passives: "Passives", promoters: "Promoters", impact: "Impact on the overall score",
+  shareAnswers: "Share of answers", ifLikeRest: "If this group scored like the rest, the overall would be", pullsDown: "pulls the score down", pullsUp: "pulls the score up",
+  vsPrevPoint: "vs. previous period", theme: "Theme", commentsCount: "Comments", commentsWord: "comments", bandSplit: "Who commented", ofComments: "of comments",
+  quotesNote: "Sample comments from the full period, personal data removed; counts and bars follow the filters.", ciCol: "CI", nCol: "n", sampleCol: "Sample"
+}, META.strings || {});
+
+/* ======================================================================== */
+/* 1. Data decoding                                                          */
+/*    Accepts an array of row objects OR the compact columnar format from    */
+/*    build.py: {n, columns:[{key,type:"date"|"cat"|"num",values,dict?}]}    */
+/*    Dates travel as integer days since 1970-01-01 (UTC) or ISO strings.    */
+/* ======================================================================== */
+const DAY = 864e5;
+const F = R.fields || {};
+const DATE = F.date || null;
+const DIMS = Object.fromEntries((F.dims || []).map(d => [d.key, d]));
+const MEAS = Object.fromEntries((F.measures || []).map(m => [m.key, m]));
+const parseDate = v => v == null ? null : (typeof v === "number" ? new Date(v * DAY) : new Date(String(v).length <= 10 ? v + "T00:00:00Z" : v));
+function decode(data) {
+  if (Array.isArray(data)) return data.map(r => (DATE && (r[DATE] = parseDate(r[DATE])), r));
+  const n = data.n, rows = Array.from({ length: n }, () => ({}));
+  for (const c of data.columns) {
+    const v = c.values;
+    if (c.type === "cat") for (let i = 0; i < n; i++) rows[i][c.key] = v[i] == null || v[i] < 0 ? null : c.dict[v[i]];
+    else if (c.type === "date") for (let i = 0; i < n; i++) rows[i][c.key] = parseDate(v[i]);
+    else for (let i = 0; i < n; i++) rows[i][c.key] = v[i];
+  }
+  return rows;
+}
+const ROWS = decode(R.data);
+const DATE_EXTENT = DATE ? d3.extent(ROWS, r => r[DATE]) : [null, null];
+
+/* ======================================================================== */
+/* 2. Formatting — Intl, locale-aware (pt-BR → 1.234,5 · R$ 1,2 mi · 12,3%)  */
+/* ======================================================================== */
+const CUR = META.currency || (PT ? "BRL" : "USD");
+const nf = o => new Intl.NumberFormat(LANG, o);
+const NF = {
+  cur0: nf({ style: "currency", currency: CUR, maximumFractionDigits: 0 }),
+  cur2: nf({ style: "currency", currency: CUR, minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+  curC: nf({ style: "currency", currency: CUR, notation: "compact", maximumFractionDigits: 1 }),
+  int: nf({ maximumFractionDigits: 0 }), dec: nf({ maximumFractionDigits: 2 }),
+  cmp: nf({ notation: "compact", maximumFractionDigits: 1 }),
+  cmp0: nf({ notation: "compact", maximumFractionDigits: 0 }),
+  pct: nf({ style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+  pct0: nf({ style: "percent", maximumFractionDigits: 0 }),
+  sPct: nf({ style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1, signDisplay: "exceptZero" }),
+  sDec: nf({ minimumFractionDigits: 1, maximumFractionDigits: 1, signDisplay: "exceptZero" }),
+  sDec2: nf({ minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: "exceptZero" }),
+  dec1: nf({ minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+};
+/** fmt(value, format, compact) — format ∈ currency | number | decimal | percent | nps (−1…1 shown as −100…+100 points) */
+const MINUS = s => s.replace(/^-(?=[\dR$€£¥])/, "−");   // typographic minus for negatives
+function fmt(v, f = "number", compact = false) { return MINUS(fmtRaw(v, f, compact)); }
+function fmtRaw(v, f, compact) {
+  if (v == null || !isFinite(v)) return "—";
+  switch (f) {
+    case "nps": return compact ? NF.int.format(v * 100) : NF.dec1.format(v * 100).replace(/[,.]0$/, "");
+    case "currency": return compact && Math.abs(v) >= 1e4 ? NF.curC.format(v) : (Math.abs(v) >= 100 || (compact && Number.isInteger(v))) ? NF.cur0.format(v) : NF.cur2.format(v);
+    case "percent": return compact ? NF.pct0.format(v) : NF.pct.format(v);
+    case "decimal": return compact && Math.abs(v) >= 1e4 ? NF.cmp.format(v) : NF.dec.format(v);
+    default: return compact && Math.abs(v) >= 1e4 ? NF.cmp.format(v) : NF.int.format(v);
+  }
+}
+/** tight labels for dense marks (heatmap cells): no currency symbol, no decimals — say the unit in the subtitle */
+/* big=true forces compact notation for every cell so a row never mixes "7.270" with "10 mil" */
+const fmtTight = (v, f, big = false) => MINUS(fmtTightRaw(v, f, big));
+const fmtTightRaw = (v, f, big) => v == null || !isFinite(v) ? "" : f === "percent" ? NF.pct0.format(v) : f === "nps" ? NF.int.format(v * 100) : (big || Math.abs(v) >= 1e4) ? NF.cmp.format(v) : NF.int.format(v);
+/** change between two values: relative % for amounts, percentage points for rates */
+const changeTxt = (cur, prev, m) => m.format === "percent" ? `${NF.sDec.format((cur - prev) * 100)} ${T.pp}` : m.format === "nps" ? `${NF.sDec.format((cur - prev) * 100)} pts`
+  : m.change === "abs" ? NF.sDec2.format(cur - prev) : NF.sPct.format(cur / prev - 1);
+const mon = new Intl.DateTimeFormat(LANG, { month: "short", timeZone: "UTC" });
+const monName = d => mon.format(d).replace(".", "");
+const dShort = new Intl.DateTimeFormat(LANG, { day: "numeric", month: "short", timeZone: "UTC" });
+const dFull = new Intl.DateTimeFormat(LANG, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+const dMonthYear = new Intl.DateTimeFormat(LANG, { month: "long", year: "numeric", timeZone: "UTC" });
+const iso = d => d.toISOString().slice(0, 10);
+function fmtPeriod(d, grain) {
+  if (grain === "month") return dMonthYear.format(d);
+  if (grain === "quarter") return `${T.q}${Math.floor(d.getUTCMonth() / 3) + 1} ${d.getUTCFullYear()}`;
+  if (grain === "year") return String(d.getUTCFullYear());
+  if (grain === "week") return T.weekOf + dFull.format(d);
+  return dFull.format(d);
+}
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+/** tiny markdown for spec text: **bold** and _italic_ (escaped first, so safe) */
+const md = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/(^|\s)_(.+?)_/g, "$1<em>$2</em>");
+
+/* ======================================================================== */
+/* 3. Measures & aggregation                                                 */
+/*    measure: {key,label,format,agg: sum|mean|count|distinct|min|max|ratio,  */
+/*              field?, num?, den?, good?: "up"|"down", description?}        */
+/*    Ratios are ALWAYS sum(num)/sum(den) — never an average of ratios.      */
+/* ======================================================================== */
+function agg(rows, m) {
+  if (typeof m === "string") m = MEAS[m];
+  const f = m.field ?? m.key;
+  switch (m.agg || "sum") {
+    case "sum": return d3.sum(rows, r => r[f]);
+    case "mean": return d3.mean(rows, r => r[f]);
+    case "min": return d3.min(rows, r => r[f]);
+    case "max": return d3.max(rows, r => r[f]);
+    case "count": return m.field ? d3.sum(rows, r => r[m.field]) : rows.length;
+    case "distinct": return new Set(rows.map(r => r[m.field])).size;
+    case "ratio": { const d = d3.sum(rows, r => r[m.den]); return d ? d3.sum(rows, r => r[m.num]) / d : null; }
+    case "nps": { const d = d3.sum(rows, r => r[m.den]); return d ? (d3.sum(rows, r => r[m.pos]) - d3.sum(rows, r => r[m.neg])) / d : null; }   // (Σpromoters − Σdetractors) / Σanswered
+  }
+}
+const isAdditive = m => ["sum", "count"].includes(((typeof m === "string" ? MEAS[m] : m).agg) || "sum");
+
+/* time grains (UTC). Weeks start on Monday (ISO). */
+const GRAIN = {
+  day: d => d,
+  week: d => new Date(+d - ((d.getUTCDay() + 6) % 7) * DAY),
+  month: d => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)),
+  quarter: d => new Date(Date.UTC(d.getUTCFullYear(), Math.floor(d.getUTCMonth() / 3) * 3, 1)),
+  year: d => new Date(Date.UTC(d.getUTCFullYear(), 0, 1)),
+};
+const GRAIN_ORDER = ["day", "week", "month", "quarter", "year"];
+function grainFor([a, b]) {
+  if (META.grain) return META.grain;                       // forced grain
+  const days = (b - a) / DAY;
+  const g = days <= 75 ? "day" : days <= 400 ? "week" : days <= 1800 ? "month" : "quarter";
+  const min = META.minGrain || "day";                      // never finer than the data
+  return GRAIN_ORDER.indexOf(g) < GRAIN_ORDER.indexOf(min) ? min : g;
+}
+/** time series of a measure → [{date, value}] sorted */
+function series(rows, measure, grain) {
+  const fl = GRAIN[grain];
+  return d3.rollups(rows, v => agg(v, measure), r => +fl(r[DATE]))
+    .map(([k, value]) => ({ date: new Date(k), value })).sort((a, b) => a.date - b.date);
+}
+
+/* ======================================================================== */
+/* 4. Filter state + cross-filtering                                         */
+/* ======================================================================== */
+const S = { range: null, preset: null, cats: {} };  // range: [Date, Date] inclusive; cats: {field: Set}
+function addMonthsUTC(d, n) { const x = new Date(d); x.setUTCMonth(x.getUTCMonth() + n); return x; }
+function presetRange(p) {
+  const [mn, mx] = DATE_EXTENT; if (!mn) return null;
+  const clamp = d => d < mn ? mn : d;
+  switch (p) {
+    case "ytd": return [clamp(new Date(Date.UTC(mx.getUTCFullYear(), 0, 1))), mx];
+    case "30d": return [clamp(new Date(+mx - 29 * DAY)), mx];
+    case "90d": return [clamp(new Date(+mx - 89 * DAY)), mx];
+    case "12m": return [clamp(new Date(+addMonthsUTC(mx, -12) + DAY)), mx];
+    case "24m": return [clamp(new Date(+addMonthsUTC(mx, -24) + DAY)), mx];
+    default: return [mn, mx];
+  }
+}
+/** rows passing every filter; optionally ignoring one categorical field and/or using another window */
+function filterRows({ except = null, range = S.range } = {}) {
+  const cats = Object.entries(S.cats).filter(([k, s]) => k !== except && s.size);
+  const a = range ? +range[0] : -Infinity, b = range ? +range[1] : Infinity;
+  return ROWS.filter(r => {
+    if (DATE) { const t = +r[DATE]; if (t < a || t > b) return false; }
+    for (const [k, s] of cats) if (!s.has(r[k])) return false;
+    return true;
+  });
+}
+/** comparison window: "yoy" = same window one year earlier (default); "previous" = same length right before */
+function compareRange(range = S.range) {
+  if (!range || !DATE) return null;
+  const r = META.compare === "previous"
+    ? [new Date(+range[0] - (+range[1] - +range[0]) - DAY), new Date(+range[0] - DAY)]
+    : [addMonthsUTC(range[0], -12), addMonthsUTC(range[1], -12)];
+  return r[0] >= DATE_EXTENT[0] ? r : null;   // only compare when the base is fully covered by data
+}
+const compareLabel = () => (META.compare === "previous" ? T.vsPrev : T.vsYoy);
+function toggleCat(field, value, additive = false) {
+  const s = S.cats[field] || (S.cats[field] = new Set());
+  if (s.has(value)) s.delete(value); else { if (!additive) s.clear(); s.add(value); }
+  update();
+}
+function setCats(field, values) { S.cats[field] = new Set(values); update(); }
+function setRange(r, preset = null) { S.range = r; S.preset = preset; update(); }
+const DEFAULT_PRESET = (R.filters && R.filters.defaultPreset) || "all";
+function reset() { S.cats = {}; S.preset = DEFAULT_PRESET; S.range = presetRange(DEFAULT_PRESET); update(); }
+const hasSel = f => !!(S.cats[f] && S.cats[f].size);
+const isSel = (f, v) => hasSel(f) && S.cats[f].has(v);
+
+/* ======================================================================== */
+/* 5. Theme + colors (resolved from CSS so Plot gets literal color values)   */
+/* ======================================================================== */
+let C = {}, booted = false;
+function readColors() {
+  const cs = getComputedStyle(document.documentElement), g = k => cs.getPropertyValue(k).trim();
+  C = { bg: g("--bg"), surface: g("--surface"), surface2: g("--surface-2"), ink: g("--ink"), ink2: g("--ink-2"), muted: g("--muted"),
+        faint: g("--faint"), rule: g("--rule"), accent: g("--accent"), accentDeep: g("--accent-deep"), neg: g("--neg"), context: g("--context"),
+        posInk: g("--pos-ink"), negInk: g("--neg-ink"), line: g("--line"), tipBg: g("--tip-bg"), tipInk: g("--tip-ink"), hero: g("--hero"), heroInk: g("--hero-ink"), areaOp: +g("--area-op") || 0.6,
+        heat: [g("--heat-lo"), g("--heat-mid"), g("--heat-hi")], heatInkHi: g("--heat-ink-hi"),
+        pal: [1, 2, 3, 4, 5, 6, 7, 8].map(i => g("--c" + i)), sans: g("--sans"), heading: g("--heading"), mono: g("--mono"),
+        primary: g("--primary"), primaryText: g("--primary-text"), pos: g("--pos"), footerBg: g("--footer-bg"), artBg: g("--art-bg"), artInk: g("--art-ink"),
+        dv: [1, 2, 3, 4, 5].map(i => g("--dv" + i)), dvInk: [1, 2, 3, 4, 5].map(i => g(`--dv${i}-ink`)),
+        radius: parseFloat(g("--radius")) || 0, fsKpi: +g("--fs-kpi") || 85 };
+}
+function applyTheme(t, persist = true) {
+  document.documentElement.dataset.theme = t;
+  if (persist) try { localStorage.setItem("report-theme", t); } catch (e) {}
+  const tl = document.getElementById("theme-label"); if (tl) tl.textContent = t === "dark" ? T.light : T.dark;
+  readColors(); if (booted) { update(); drawArt(); }
+}
+/* theme options resolved by build.py / tema.py (temas/*.json): hero style, art strip, motion, logo */
+const THEME = R._theme || {};
+const MK = THEME.motion === false ? 0 : (THEME.speed || 1);              // duration multiplier (CSS --mk mirrors it)
+if (THEME.hero === "plain") document.documentElement.classList.add("hero-plain");
+if (THEME.motion === false) document.documentElement.classList.add("no-motion");
+(function initTheme() {
+  let t = null;
+  const qs = new URLSearchParams(location.search).get("theme");     // ?theme=dark (handy for screenshots)
+  try { t = qs || localStorage.getItem("report-theme"); } catch (e) { t = qs; }
+  const mode = META.theme || THEME.mode;
+  if (!t) t = mode && mode !== "auto" ? mode : (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  document.documentElement.dataset.theme = t; readColors();
+})();
+/* reduced motion → every reveal shows its final state, no count-ups, no intro */
+const RM = matchMedia("(prefers-reduced-motion: reduce)").matches || new URLSearchParams(location.search).has("static") || THEME.motion === false;
+if (!RM && scrollY < 40) document.documentElement.classList.add("intro");
+
+/* ======================================================================== */
+/* 6. Shared Plot defaults + floating tooltip for HTML charts                */
+/* ======================================================================== */
+const tt = document.getElementById("tt");
+function showTip(e, html) { tt.innerHTML = html; tt.classList.add("on"); moveTip(e); }
+function moveTip(e) {
+  const w = tt.offsetWidth, h = tt.offsetHeight;
+  let x = e.clientX + 14, y = e.clientY + 14;
+  if (x + w > innerWidth - 8) x = e.clientX - w - 14;
+  if (y + h > innerHeight - 8) y = e.clientY - h - 14;
+  tt.style.left = x + "px"; tt.style.top = y + "px";
+}
+const hideTip = () => tt.classList.remove("on");
+function basePlot(o) {
+  return Object.assign({
+    style: { fontFamily: C.sans, fontSize: "13px", color: C.muted, background: "transparent", overflow: "visible", letterSpacing: "-.01em" },
+    marginTop: 18, marginRight: 16, marginBottom: 30, marginLeft: 52,
+  }, o);
+}
+const tipStyle = () => ({ fill: C.tipBg, stroke: "none", textPadding: 10, fontSize: 13, lineHeight: 1.4 });
+/** time axis ticks: "fev", "jan\n2026", or "12 nov" for sub-month ticks */
+const timeTick = d => d.getUTCDate() !== 1 ? dShort.format(d).replace(".", "")
+  : d.getUTCMonth() === 0 ? `${monName(d)}\n${d.getUTCFullYear()}` : monName(d);
+
+/* ======================================================================== */
+/* 7. Chart renderers — CHARTS[type](el, spec). Spec fields documented above */
+/*    each renderer. Add new types here; keep them filter-aware.            */
+/* ======================================================================== */
+const CHARTS = {};
+const curGrain = () => grainFor(S.range || DATE_EXTENT);
+/** spec.grain acts as the FINEST grain a chart may use (e.g. "month" to calm a noisy half-width chart) */
+const grainOf = c => c.grain && GRAIN_ORDER.indexOf(c.grain) > GRAIN_ORDER.indexOf(curGrain()) ? c.grain : curGrain();
+/** hide labels that collide with an earlier (= more important) label. Call after the SVG is in the DOM. */
+function declutter(root, sel, pad = 2) {
+  const kept = [];
+  for (const n of root.querySelectorAll(sel)) {
+    const b = n.getBoundingClientRect();
+    if (!b.width) continue;
+    const hit = kept.some(k => b.left < k.right + pad && b.right > k.left - pad && b.top < k.bottom + pad && b.bottom > k.top - pad);
+    if (hit) n.style.display = "none"; else kept.push(b);
+  }
+}
+/** push vertically-stacked end labels apart (1-D dodge) so direct labels never overlap */
+function dodgeY(root, sel, gap = 2) {
+  const nodes = [...root.querySelectorAll(sel)].map(n => ({ n, b: n.getBoundingClientRect() })).filter(o => o.b.height).sort((a, b) => a.b.top - b.b.top);
+  let lastBottom = -Infinity;
+  for (const o of nodes) {
+    const shift = Math.max(0, lastBottom + gap - o.b.top);
+    if (shift) o.n.setAttribute("transform", `${o.n.getAttribute("transform") || ""} translate(0,${shift})`);
+    lastBottom = o.b.bottom + shift;
+  }
+}
+
+/** line — trend over time.
+ *  {measure, series?: dim, top?: 5, annotations?: [{date,label}], area?: true, peak?: true, zero?: bool, height?} */
+CHARTS.line = (el, c) => {
+  const m = MEAS[c.measure], rows = filterRows(), grain = grainOf(c);
+  const W = el.clientWidth, H = c.height || Math.round(Math.max(240, Math.min(360, W * 0.4)));
+  if (!rows.length) return empty(el);
+  let data, z = null;
+  if (c.series) {
+    const top = d3.groupSort(rows, v => -agg(v, m), r => r[c.series]).filter(k => k != null).slice(0, c.top || 5);
+    z = "s";
+    data = top.flatMap(s => series(rows.filter(r => r[c.series] === s), m, grain).map(d => ({ ...d, s })));
+  } else data = series(rows, m, grain);
+  const zero = c.zero ?? isAdditive(m);
+  const colorOf = c.series ? d3.scaleOrdinal([...new Set(data.map(d => d.s))], C.pal) : () => C.line;
+  const stroke = c.series ? d => colorOf(d.s) : C.line;
+  const marks = [];
+  if (zero) marks.push(Plot.ruleY([0], { stroke: C.rule }));
+  if (!c.series && c.area !== false) marks.push(Plot.areaY(data, { x: "date", y: "value", fill: C.accent, fillOpacity: C.areaOp, curve: "monotone-x" }));
+  marks.push(Plot.lineY(data, { x: "date", y: "value", z, stroke, strokeWidth: c.series ? 2.5 : 1.75, curve: "monotone-x" }));
+  // direct labels at line ends instead of a legend
+  marks.push(Plot.dot(data, Plot.selectLast({ x: "date", y: "value", z, fill: stroke, r: 3 })));
+  const narrow = W < 560 && !c.series;   // on phones the last-value label sits above the point instead of beside it
+  marks.push(Plot.text(data, Plot.selectLast({ x: "date", y: "value", z, text: d => c.series ? d.s : fmt(d.value, m.format, true),
+    dx: narrow ? 0 : 8, dy: narrow ? -12 : 0, textAnchor: narrow ? "end" : "start", stroke: C.bg, strokeWidth: 4, paintOrder: "stroke", fill: C.ink, fontWeight: 500, fontSize: 14, className: "endlabel" })));
+  // editorial annotations from the spec — dashed rule + label
+  const span = data.length > 1 ? (data.at(-1).date - data[0].date) : 0;
+  let ann = (c.annotations || []).map(a => ({ ...a, d: parseDate(a.date) })).filter(a => data.length && a.d >= data[0].date && a.d <= data.at(-1).date);
+  // annotate the peak (single series); if an annotation sits on the peak, merge them into one label
+  if (!c.series && data.length > 3 && c.peak !== false) {
+    const pk = d3.greatest(data.slice(0, -1), d => d.value);
+    if (pk) {
+      const near = ann.find(a => Math.abs(a.d - pk.date) < Math.max(span * 0.03, 10 * DAY));
+      if (near) ann = ann.filter(a => a !== near);
+      const i = data.indexOf(pk);
+      marks.push(
+        Plot.dot([pk], { x: "date", y: "value", r: 4.5, stroke: C.ink, fill: C.neg, strokeWidth: 1.25 }),
+        Plot.text([pk], { x: "date", y: "value", text: d => `${near ? near.label : T.peak}: ${fmt(d.value, m.format, true)}`,
+          dy: -15, fill: C.ink, fontSize: 13, fontWeight: 500, stroke: C.bg, strokeWidth: 4, paintOrder: "stroke",
+          textAnchor: i > data.length * 0.8 ? "end" : i < data.length * 0.15 ? "start" : "middle" }));
+    }
+  }
+  if (ann.length) marks.push(Plot.ruleX(ann, { x: "d", stroke: C.faint, strokeDasharray: "2,3" }),
+    Plot.text(ann, { x: "d", text: "label", frameAnchor: "top", dy: -14, textAnchor: "middle", fill: C.muted, fontSize: 12, fontFamily: C.mono }));
+  // hover: crosshair + dot + tip
+  marks.push(Plot.ruleX(data, Plot.pointerX({ x: "date", stroke: C.ink, strokeOpacity: 0.5 })),
+    Plot.dot(data, Plot.pointerX({ x: "date", y: "value", z, fill: c.series ? stroke : C.accent, stroke: C.ink, strokeWidth: 1.25, r: 5 })),
+    Plot.tip(data, Plot.pointerX({ x: "date", y: "value", z, ...tipStyle(),
+      title: d => `${fmtPeriod(d.date, grain)}${c.series ? "\n" + d.s : ""}\n${m.label}: ${fmt(d.value, m.format)}` })));
+  el.append(Plot.plot(basePlot({
+    width: W, height: H, marginRight: c.series ? 100 : narrow ? 12 : 64, marginTop: 30,
+    x: { type: "utc", label: null, ticks: Math.max(3, Math.floor(W / 90)), tickFormat: timeTick },
+    y: { grid: true, label: null, nice: true, zero, tickFormat: v => fmt(v, m.format, true), ticks: 5 },
+    marks,
+  })));
+  if (c.series) dodgeY(el, ".endlabel text");
+};
+
+/** bars — ranked horizontal bars (HTML, zero-based, click-to-filter, comparison tick).
+ *  Label sits above a flat bar; the value rides the bar end. Bars grow in on first view and
+ *  animate from their previous width on every filter change.
+ *  {dim, measure, top?: 10, share?: true, compare?: true} */
+CHARTS.bars = (el, c) => {
+  const m = MEAS[c.measure], rows = filterRows({ except: c.dim });
+  if (!rows.length) return empty(el);
+  let data = d3.rollups(rows, v => agg(v, m), r => r[c.dim]).map(([k, v]) => ({ k, v })).filter(d => d.k != null);
+  data.sort((a, b) => d3.descending(a.v, b.v));
+  const total = isAdditive(m) ? d3.sum(data, d => d.v) : null;
+  const top = c.top || 10;
+  if (data.length > top + 1) {
+    const rest = data.slice(top), restKeys = new Set(rest.map(x => x.k));
+    const restV = isAdditive(m) ? d3.sum(rest, d => d.v) : agg(rows.filter(r => restKeys.has(r[c.dim])), m);
+    data = data.slice(0, top).concat([{ k: `+ ${rest.length} ${T.others}`, v: restV, other: true }]);
+  }
+  const cr = c.compare !== false ? compareRange() : null;
+  const prevMap = cr ? new Map(d3.rollups(filterRows({ except: c.dim, range: cr }), v => agg(v, m), r => r[c.dim])) : null;
+  const max = d3.max(data, d => Math.max(d.v, d.other ? 0 : prevMap?.get(d.k) ?? 0)) || 1;
+  const wrap = document.createElement("div");
+  if (prevMap) wrap.innerHTML = `<div class="legend-inline"><span><i style="background:${C.accent}"></i>${esc(T.current)}</span><span><i class="tick"></i>${esc(compareLabel())}</span></div>`;
+  const list = document.createElement("div");
+  list.className = "bars" + (hasSel(c.dim) ? " has-sel" : "");
+  const before = el._w, live = !!before && el.closest(".chart")?.classList.contains("in"), next = new Map();
+  data.forEach((d, i) => {
+    const b = document.createElement("button");
+    b.className = "bar" + (d.other ? " other" : "") + (isSel(c.dim, d.k) ? " sel" : "");
+    const p = d.other ? null : prevMap?.get(d.k);
+    const w = Math.max(0, d.v) / max * 100; next.set(d.k, w);
+    const shareTxt = total && c.share !== false ? `<small>${fmt(d.v / total, "percent")}</small>` : "";
+    const dl = p ? changeTxt(d.v, p, m) : "";
+    b.style.setProperty("--w", w + "%");
+    b.style.setProperty("--d", live ? "0ms" : `${Math.min(i * 60, 720) * MK}ms`);
+    b.innerHTML = `<span class="head"><span class="lbl">${esc(d.k)}</span>${dl ? `<span class="dl">${dl}</span>` : ""}</span><span class="track"><span class="lane"><span class="fill"><span class="val">${fmt(d.v, m.format, true)}${shareTxt}</span></span>${p != null ? `<span class="prev" style="left:${Math.max(0, p) / max * 100}%"></span>` : ""}</span></span>`;
+    if (live) b.querySelector(".fill").style.width = (before.get(d.k) ?? 0) + "%";
+    if (!d.other) {
+      b.setAttribute("aria-pressed", String(isSel(c.dim, d.k)));
+      b.onclick = e => { hideTip(); toggleCat(c.dim, d.k, e.shiftKey || e.metaKey || e.ctrlKey); };
+      b.onmouseenter = e => showTip(e, `<b>${esc(d.k)}</b><br>${esc(m.label)}: ${fmt(d.v, m.format)}${total ? `<br><span class="k">${fmt(d.v / total, "percent")} ${T.share}</span>` : ""}${p ? `<br><span class="k">${esc(compareLabel())}: ${fmt(p, m.format)} (${changeTxt(d.v, p, m)})</span>` : ""}`);
+      b.onmousemove = moveTip; b.onmouseleave = hideTip;
+    } else b.disabled = true;
+    list.append(b);
+  });
+  wrap.append(list); el.append(wrap); hint(el);
+  el._w = next;
+  if (live) { void list.offsetWidth; list.querySelectorAll(".fill").forEach(f => f.style.width = ""); }
+};
+
+/** columns — a few categories as tall flat columns with big numbers on top (≤ 6 reads best).
+ *  {dim, measure, top?: 5, share?: true, height?: 360} */
+CHARTS.columns = (el, c) => {
+  const m = MEAS[c.measure], rows = filterRows({ except: c.dim });
+  if (!rows.length) return empty(el);
+  let data = d3.rollups(rows, v => agg(v, m), r => r[c.dim]).map(([k, v]) => ({ k, v })).filter(d => d.k != null).sort((a, b) => b.v - a.v);
+  const top = c.top || 5;
+  if (data.length > top + 1) {
+    const rest = data.slice(top), restKeys = new Set(rest.map(x => x.k));
+    data = data.slice(0, top).concat([{ k: `+ ${rest.length} ${T.others}`, v: isAdditive(m) ? d3.sum(rest, d => d.v) : agg(rows.filter(r => restKeys.has(r[c.dim])), m), other: true }]);
+  }
+  const total = isAdditive(m) ? d3.sum(data, d => d.v) : null, max = d3.max(data, d => d.v) || 1;
+  const box = document.createElement("div");
+  box.className = "cols" + (hasSel(c.dim) ? " has-sel" : "");
+  box.style.setProperty("--n", data.length);
+  if (c.height) box.style.setProperty("--hgt", c.height + "px");
+  const before = el._h, live = !!before && el.closest(".chart")?.classList.contains("in"), next = new Map();
+  data.forEach((d, i) => {
+    const b = document.createElement("button");
+    b.className = "col" + (d.other ? " other" : "") + (isSel(c.dim, d.k) ? " sel" : "");
+    const h = Math.max(0, d.v) / max * 68; next.set(d.k, h);
+    b.style.setProperty("--h", h + "%");
+    b.style.setProperty("--d", live ? "0ms" : `${i * 60 * MK}ms`);
+    b.innerHTML = `<span class="lbl">${esc(d.k)}</span><span class="num">${fmt(d.v, m.format, true)}${total && c.share !== false ? `<small>${fmt(d.v / total, "percent")} ${esc(T.share)}</small>` : ""}</span><span class="fill"></span>`;
+    if (live) b.querySelector(".fill").style.height = (before.get(d.k) ?? 0) + "%";
+    if (!d.other) {
+      b.setAttribute("aria-pressed", String(isSel(c.dim, d.k)));
+      b.onclick = e => { hideTip(); toggleCat(c.dim, d.k, e.shiftKey || e.metaKey || e.ctrlKey); };
+      b.onmouseenter = e => showTip(e, `<b>${esc(d.k)}</b><br>${esc(m.label)}: ${fmt(d.v, m.format)}${total ? `<br><span class="k">${fmt(d.v / total, "percent")} ${T.share}</span>` : ""}`);
+      b.onmousemove = moveTip; b.onmouseleave = hideTip;
+    } else b.disabled = true;
+    box.append(b);
+  });
+  el.append(box); hint(el);
+  // one number size for every column: as big as the widest label allows (cap 64px)
+  // narrow columns (phones): let "R$ 720,1 mil" break into lines and size by its longest word instead
+  const colW = el.clientWidth / data.length, labels = data.map(d => fmt(d.v, m.format, true));
+  const full = (colW - 16) / ((d3.max(labels, t => t.length) || 3) * 0.6);
+  const tok = (colW - 12) / ((d3.max(labels.flatMap(t => t.split(/[\s\u00a0\u202f]+/)), t => t.length) || 3) * 0.62);
+  box.classList.toggle("wrapnum", full < 28);
+  if (full < 28) box.querySelectorAll(".num").forEach(n => { n.firstChild.textContent = n.firstChild.textContent.replace(/[\u00a0\u202f]/g, " "); });
+  box.style.setProperty("--num", `${Math.round(full >= 28 ? Math.min(64, full) : Math.max(14, Math.min(40, tok)))}px`);
+  el._h = next;
+  if (live) { void box.offsetWidth; box.querySelectorAll(".fill").forEach(f => f.style.height = ""); }
+};
+
+/** share — part-to-whole strip with direct labels (use instead of a pie). {dim, measure, top?: 6, minShare?: 0.02}
+ *  Slices under minShare are folded into "outros" so labels stay readable. */
+CHARTS.share = (el, c) => {
+  const m = MEAS[c.measure], rows = filterRows({ except: c.dim });
+  if (!rows.length) return empty(el);
+  let data = d3.rollups(rows, v => agg(v, m), r => r[c.dim]).map(([k, v]) => ({ k, v })).filter(d => d.k != null).sort((a, b) => b.v - a.v);
+  const top = c.top || 6, tot0 = d3.sum(data, d => d.v), minShare = c.minShare ?? 0.02;
+  let keep = 0;
+  while (keep < data.length && keep < top - 1 && data[keep].v / tot0 >= minShare) keep++;
+  const rest = data.slice(keep);
+  if (rest.length > 1 || (rest.length === 1 && rest[0].v / tot0 < minShare))
+    data = data.slice(0, keep).concat([{ k: rest.length > 1 ? `${T.others} (${rest.length})` : rest[0].k, v: d3.sum(rest, d => d.v), other: true }]);
+  const total = d3.sum(data, d => d.v);
+  const box = document.createElement("div");
+  box.className = "share" + (hasSel(c.dim) ? " has-sel" : "");
+  const col = (d, i) => d.other ? C.context : C.pal[i % C.pal.length];
+  let cum = 0;
+  const pcts = data.map((d, i) => { const sh = Math.max(0, d.v) / total, x = cum; cum += sh;
+    if (sh < 0.06) return "";
+    const pos = x + 0.1 > 1 ? `right:0` : `left:${x * 100}%`;
+    return `<span data-i="${i}" class="${isSel(c.dim, d.k) ? "sel" : ""}" style="${pos};--d:${i * 60}ms">${fmt(sh, "percent")}</span>`; }).join("");
+  box.innerHTML = `<div class="pcts">${pcts}</div><div class="strip">${data.map((d, i) => `<div class="seg-s${isSel(c.dim, d.k) ? " sel" : ""}" data-i="${i}" style="flex-grow:${Math.max(0, d.v)};background:${col(d, i)}"></div>`).join("")}</div>
+    <div class="labels">${data.map((d, i) => `<div data-i="${i}" class="${isSel(c.dim, d.k) ? "sel" : ""}"><i style="background:${col(d, i)}"></i>${esc(d.k)} (${fmt(d.v / total, "percent")})<small>${fmt(d.v, m.format, true)}</small></div>`).join("")}</div>`;
+  box.querySelectorAll("[data-i]").forEach(n => {
+    const d = data[+n.dataset.i]; if (d.other) return;
+    n.onclick = e => { hideTip(); toggleCat(c.dim, d.k, e.shiftKey || e.metaKey); };
+    n.onmouseenter = e => showTip(e, `<b>${esc(d.k)}</b><br>${fmt(d.v, m.format)} · ${fmt(d.v / total, "percent")}`);
+    n.onmousemove = moveTip; n.onmouseleave = hideTip;
+  });
+  el.append(box); hint(el);
+};
+
+/** multiples — small multiples per category; the other series drawn in grey as context.
+ *  {dim, measure, top?: 12, grain?: "month", scale?: "shared" | "independent"}
+ *  shared (default) = honest magnitude comparison; independent = compare SHAPES (say so in the subtitle). */
+CHARTS.multiples = (el, c) => {
+  const m = MEAS[c.measure], rows = filterRows({ except: c.dim }), grain = grainOf(c);
+  if (!rows.length) return empty(el);
+  const keys = d3.groupSort(rows, v => -agg(v, m), r => r[c.dim]).filter(k => k != null).slice(0, c.top || 12);
+  const all = keys.map(k => ({ k, rows: rows.filter(r => r[c.dim] === k) })).map(a => ({ ...a, s: series(a.rows, m, grain) }));
+  const shared = c.scale !== "independent";
+  const gMax = d3.max(all, a => d3.max(a.s, d => d.value)), gMin = isAdditive(m) ? 0 : d3.min(all, a => d3.min(a.s, d => d.value));
+  // context lines: raw values when shared; each series scaled to its own max when independent
+  const box = document.createElement("div");
+  box.className = "multiples" + (hasSel(c.dim) ? " has-sel" : "");
+  // pick a column count that fills rows evenly (6 → 3×2, not 5+1)
+  const maxCols = Math.max(1, Math.floor((el.clientWidth + 30) / (200 + 30))), n = all.length;
+  let cols = Math.min(maxCols, n);
+  for (let k = cols; k >= Math.max(2, Math.ceil(cols / 2)); k--) if (n % k === 0) { cols = k; break; }
+  box.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+  el.append(box);
+  const w = Math.floor((el.clientWidth - (cols - 1) * 30) / cols);
+  const cr = compareRange(), prevRows = cr ? filterRows({ except: c.dim, range: cr }) : null;
+  const dom = all.length ? d3.extent(all.flatMap(a => a.s), d => d.date) : null;
+  for (const a of all) {
+    const cell = document.createElement("div");
+    cell.className = "multiple" + (isSel(c.dim, a.k) ? " sel" : "");
+    const tot = agg(a.rows, m);
+    let chHtml = "";
+    if (prevRows) {
+      const p = agg(prevRows.filter(r => r[c.dim] === a.k), m);
+      if (p) { const good = ((tot >= p) === ((m.good || "up") === "up")); chHtml = `<div class="ch" style="color:${good ? C.posInk : C.negInk}">${changeTxt(tot, p, m)} <span style="color:${C.muted};font-weight:400">${esc(compareLabel())}</span></div>`; }
+    }
+    cell.innerHTML = `<h4 title="${esc(T.clickHint)}">${esc(a.k)}<span>${fmt(tot, m.format, true)}</span></h4>${chHtml}`;
+    cell.querySelector("h4").onclick = e => toggleCat(c.dim, a.k, e.shiftKey || e.metaKey);
+    const own = d3.max(a.s, d => d.value) || 1;
+    const yMax = shared ? gMax : own, yMin = shared ? gMin : (isAdditive(m) ? 0 : d3.min(a.s, d => d.value));
+    const ctx = all.filter(o => o.k !== a.k).flatMap(o => { const om = d3.max(o.s, d => d.value) || 1; return o.s.map(d => ({ date: d.date, value: shared ? d.value : d.value / om * own, k: o.k })); });
+    cell.append(Plot.plot(basePlot({
+      width: w, height: 100, marginLeft: 0, marginRight: 8, marginTop: 10, marginBottom: 20,
+      x: { type: "utc", domain: dom, label: null, ticks: dom, tickFormat: d => monName(d) + " " + String(d.getUTCFullYear()).slice(2), tickSize: 0 },
+      y: { domain: [yMin, yMax], axis: null },
+      marks: [
+        Plot.ruleY([yMin], { stroke: C.rule }),
+        Plot.lineY(ctx, { x: "date", y: "value", z: "k", stroke: C.context, strokeWidth: 1, curve: "monotone-x" }),
+        Plot.areaY(a.s, { x: "date", y: "value", y1: yMin, fill: C.accent, fillOpacity: C.areaOp, curve: "monotone-x" }),
+        Plot.lineY(a.s, { x: "date", y: "value", stroke: C.line, strokeWidth: 1.5, curve: "monotone-x" }),
+        Plot.dot(a.s.slice(-1), { x: "date", y: "value", fill: C.line, r: 2.5 }),
+        Plot.ruleX(a.s, Plot.pointerX({ x: "date", stroke: C.ink, strokeOpacity: 0.5 })),
+        Plot.tip(a.s, Plot.pointerX({ x: "date", y: "value", ...tipStyle(), title: d => `${a.k}\n${fmtPeriod(d.date, grain)}\n${fmt(d.value, m.format)}` })),
+      ],
+    })));
+    // first tick left-aligned, last right-aligned so they never spill out of the cell
+    const ticks = cell.querySelectorAll('g[aria-label="x-axis tick label"] text');
+    if (ticks.length === 2) { ticks[0].setAttribute("text-anchor", "start"); ticks[1].setAttribute("text-anchor", "end"); }
+    box.append(cell);
+  }
+  hint(el);
+};
+
+/** heatmap — two categorical axes, or time parts "$month" | "$weekday" | "$year" on either axis.
+ *  {x, y, measure, cellHeight?: 34, marginLeft?: 110}. Click a cell to filter its dimension(s). */
+const TIMEPART = {
+  $month: { key: d => d.getUTCMonth(), label: k => monName(new Date(Date.UTC(2024, k, 1))) },
+  $weekday: { key: d => (d.getUTCDay() + 6) % 7, label: k => new Intl.DateTimeFormat(LANG, { weekday: "short", timeZone: "UTC" }).format(new Date(Date.UTC(2024, 0, 1 + k))).replace(".", "") },
+  $year: { key: d => d.getUTCFullYear(), label: k => String(k) },
+};
+CHARTS.heatmap = (el, c) => {
+  const m = MEAS[c.measure];
+  const rows = filterRows({ except: DIMS[c.y] ? c.y : DIMS[c.x] ? c.x : null });
+  if (!rows.length) return empty(el);
+  const acc = f => TIMEPART[f] ? (r => TIMEPART[f].key(r[DATE])) : (r => r[f]);
+  const lab = f => TIMEPART[f] ? TIMEPART[f].label : (k => k);
+  const data = d3.flatRollup(rows, v => agg(v, m), acc(c.x), acc(c.y)).map(([x, y, v]) => ({ x, y, v })).filter(d => d.x != null && d.y != null);
+  const order = f => TIMEPART[f] ? [...new Set(rows.map(acc(f)))].sort((a, b) => a - b) : d3.groupSort(rows, v => -agg(v, m), r => r[f]).filter(k => k != null);
+  const [lo, hi] = d3.extent(data, d => d.v), t = v => (v - lo) / ((hi - lo) || 1);
+  const W = el.clientWidth, yDom = order(c.y), xDom = order(c.x), cellH = c.cellHeight || 34;
+  const ml = c.marginLeft || 110, showText = (W - ml) / xDom.length > 40;
+  const sel = hasSel(c.y) || hasSel(c.x);
+  const dim = d => sel && !((!DIMS[c.y] || !hasSel(c.y) || isSel(c.y, d.y)) && (!DIMS[c.x] || !hasSel(c.x) || isSel(c.x, d.x)));
+  const fig = Plot.plot(basePlot({
+    width: W, height: yDom.length * cellH + 34, marginLeft: ml, marginBottom: 4, marginTop: 26, marginRight: 0,
+    x: { domain: xDom, label: null, axis: "top", tickFormat: lab(c.x), tickSize: 0 },
+    y: { domain: yDom, label: null, tickFormat: lab(c.y), tickSize: 0 },
+    color: { type: "linear", domain: [lo, (lo + hi) / 2, hi], range: C.heat, interpolate: "lab" },
+    marks: [
+      Plot.cell(data, { x: "x", y: "y", fill: "v", inset: 1, fillOpacity: d => dim(d) ? 0.25 : 1 }),
+      showText ? Plot.text(data, { x: "x", y: "y", text: d => fmtTight(d.v, m.format, hi >= 1e4), fill: d => t(d.v) > 0.62 ? C.heatInkHi : C.ink2, fontSize: 12, fillOpacity: d => dim(d) ? 0.35 : 1 }) : null,
+      Plot.tip(data, Plot.pointer({ x: "x", y: "y", ...tipStyle(), title: d => `${lab(c.x)(d.x)} · ${lab(c.y)(d.y)}\n${m.label}: ${fmt(d.v, m.format)}` })),
+    ],
+  }));
+  fig.style.cursor = "pointer";
+  fig.addEventListener("click", e => { const v = fig.value; if (!v) return; hideTip(); if (DIMS[c.y]) toggleCat(c.y, v.y, e.shiftKey); else if (DIMS[c.x]) toggleCat(c.x, v.x, e.shiftKey); });
+  el.append(fig); hint(el);
+};
+
+/** scatter — two measures per category with direct labels and an average reference line.
+ *  {dim, x, y, r?: measure, labelTop?: 10, height?} */
+CHARTS.scatter = (el, c) => {
+  const mx = MEAS[c.x], my = MEAS[c.y], mr = c.r ? MEAS[c.r] : null;
+  const rows = filterRows({ except: c.dim });
+  if (!rows.length) return empty(el);
+  const data = d3.groups(rows, r => r[c.dim]).filter(([k]) => k != null)
+    .map(([k, v]) => ({ k, x: agg(v, mx), y: agg(v, my), r: mr ? agg(v, mr) : 1 }));
+  const avgY = agg(rows, my);
+  const labelSet = new Set(data.slice().sort((a, b) => b.r - a.r || b.x - a.x).slice(0, c.labelTop ?? 10).map(d => d.k));
+  data.forEach(d => { if (isSel(c.dim, d.k)) labelSet.add(d.k); });
+  const sel = hasSel(c.dim), W = el.clientWidth, H = c.height || Math.round(Math.max(280, Math.min(440, W * 0.55)));
+  const col = d => sel && !isSel(c.dim, d.k) ? C.context : C.accent;
+  const edge = d => sel && !isSel(c.dim, d.k) ? C.context : C.ink;
+  // log axes get clean 1-2-5 ticks instead of Plot's dense defaults
+  let xTicks = Math.max(3, Math.floor(W / 150));
+  if (c.logX) {
+    const [lo, hi] = d3.extent(data, d => d.x).map(v => Math.max(v, 1e-9)), out = [];
+    for (let e = Math.floor(Math.log10(lo)); e <= Math.ceil(Math.log10(hi)); e++) for (const k of [1, 2, 5]) { const t = k * 10 ** e; if (t >= lo * 0.8 && t <= hi * 1.25) out.push(t); }
+    xTicks = out.length > Math.floor(W / 70) ? out.filter((t, i) => String(t)[0] !== "2") : out;
+  }
+  const fig = Plot.plot(basePlot({
+    width: W, height: H, marginLeft: 56, marginBottom: 40, marginTop: 26,
+    x: { label: `${mx.label}${c.logX ? (PT ? " (escala log)" : " (log scale)") : ""} →`, labelAnchor: "right", grid: true, nice: !c.logX, zero: c.logX ? false : (c.zeroX ?? isAdditive(mx)), tickFormat: v => fmt(v, mx.format, true), type: c.logX ? "log" : "linear", ticks: xTicks },
+    y: { label: `↑ ${my.label}`, labelAnchor: "top", grid: true, nice: true, zero: c.zeroY ?? isAdditive(my), tickFormat: v => fmt(v, my.format, true) },
+    r: { range: [4, 20] },
+    marks: [
+      Plot.ruleY([avgY], { stroke: C.ink, strokeOpacity: 0.6, strokeDasharray: "2,4" }),
+      Plot.text([avgY], { y: d => d, frameAnchor: "right", text: () => `${T.avg} ${fmt(avgY, my.format)}`, dy: -8, fill: C.muted, fontSize: 12, textAnchor: "end" }),
+      Plot.dot(data, { x: "x", y: "y", r: mr ? "r" : 6, fill: col, fillOpacity: 0.9, stroke: edge, strokeWidth: 0.75 }),
+      Plot.text(data.filter(d => labelSet.has(d.k)).sort((a, b) => b.r - a.r || b.x - a.x), { x: "x", y: "y", text: "k", dy: -13, fill: C.ink, fontSize: 13, fontWeight: 500, stroke: C.bg, strokeWidth: 3.5, paintOrder: "stroke", className: "ptlabel" }),
+      Plot.tip(data, Plot.pointer({ x: "x", y: "y", ...tipStyle(), title: d => `${d.k}\n${mx.label}: ${fmt(d.x, mx.format)}\n${my.label}: ${fmt(d.y, my.format)}${mr ? `\n${mr.label}: ${fmt(d.r, mr.format)}` : ""}` })),
+    ],
+  }));
+  fig.style.cursor = "pointer";
+  fig.addEventListener("click", e => { const v = fig.value; if (v) { hideTip(); toggleCat(c.dim, v.k, e.shiftKey || e.metaKey); } });
+  el.append(fig); declutter(el, ".ptlabel text"); hint(el);
+};
+
+/** dumbbell — per-category change between the comparison window and now (Cleveland dot plot).
+ *  {dim, measure, top?: 12, sort?: "value"|"change", marginLeft?} */
+CHARTS.dumbbell = (el, c) => {
+  const m = MEAS[c.measure], cr = compareRange();
+  if (!cr) return empty(el, T.noPrev);
+  const cur = new Map(d3.rollups(filterRows({ except: c.dim }), v => agg(v, m), r => r[c.dim]));
+  const prev = new Map(d3.rollups(filterRows({ except: c.dim, range: cr }), v => agg(v, m), r => r[c.dim]));
+  let data = [...cur].filter(([k]) => k != null && prev.has(k)).map(([k, v]) => ({ k, cur: v, prev: prev.get(k) }));
+  data.forEach(d => { d.ch = m.format === "percent" ? d.cur - d.prev : d.cur / d.prev - 1; d.up = (d.cur >= d.prev) === ((m.good || "up") === "up"); });
+  data.sort((a, b) => c.sort === "change" ? b.ch - a.ch : b.cur - a.cur);
+  data = data.slice(0, c.top || 12);
+  if (!data.length) return empty(el);
+  const W = el.clientWidth, sel = hasSel(c.dim), faded = d => sel && !isSel(c.dim, d.k);
+  const fig = Plot.plot(basePlot({
+    width: W, height: data.length * 34 + 40, marginLeft: c.marginLeft || 110, marginRight: 72, marginTop: 24,
+    x: { grid: true, label: null, axis: "top", nice: true, zero: c.zero ?? isAdditive(m), tickFormat: v => fmt(v, m.format, true), ticks: Math.max(3, Math.floor(W / 120)) },
+    y: { domain: data.map(d => d.k), label: null, tickSize: 0 },
+    marks: [
+      Plot.ruleY(data, { y: "k", x1: "prev", x2: "cur", stroke: d => d.up ? C.accent : C.neg, strokeWidth: 4, strokeOpacity: d => faded(d) ? 0.25 : 1 }),
+      Plot.dot(data, { y: "k", x: "prev", r: 4.5, fill: C.bg, stroke: C.ink, strokeWidth: 1.25, strokeOpacity: d => faded(d) ? 0.3 : 1 }),
+      Plot.dot(data, { y: "k", x: "cur", r: 6, fill: d => faded(d) ? C.context : d.up ? C.accent : C.neg, stroke: d => faded(d) ? C.context : C.ink, strokeWidth: 1.25 }),
+      Plot.text(data, { y: "k", frameAnchor: "right", text: d => changeTxt(d.cur, d.prev, m), dx: 66, textAnchor: "end", fill: d => faded(d) ? C.faint : d.up ? C.posInk : C.negInk, fontWeight: 500, fontSize: 13 }),
+      Plot.tip(data, Plot.pointerY({ y: "k", x: "cur", ...tipStyle(), title: d => `${d.k}\n${T.current}: ${fmt(d.cur, m.format)}\n${compareLabel()}: ${fmt(d.prev, m.format)}\n${changeTxt(d.cur, d.prev, m)}` })),
+    ],
+  }));
+  const leg = document.createElement("div");
+  leg.className = "legend-inline";
+  leg.innerHTML = `<span><i style="background:${C.bg};border:1.25px solid ${C.ink};border-radius:50%"></i>${esc(compareLabel().replace(/^vs\.\s*/, ""))}</span><span><i style="background:${C.accent};border:1.25px solid ${C.ink};border-radius:50%"></i>${esc(T.current)}</span>`;
+  fig.style.cursor = "pointer";
+  fig.addEventListener("click", e => { const v = fig.value; if (v) { hideTip(); toggleCat(c.dim, v.k, e.shiftKey || e.metaKey); } });
+  el.append(leg, fig); hint(el);
+};
+
+/** change — diverging bars of % change (or p.p. for rates) per category vs the comparison window.
+ *  Scale-free, so it works when categories differ by orders of magnitude (unlike a dumbbell).
+ *  {dim, measure, top?: 15 (largest by current value), minBase?: 0} */
+CHARTS.change = (el, c) => {
+  const m = MEAS[c.measure], cr = compareRange();
+  if (!cr) return empty(el, T.noPrev);
+  const cur = new Map(d3.rollups(filterRows({ except: c.dim }), v => agg(v, m), r => r[c.dim]));
+  const prev = new Map(d3.rollups(filterRows({ except: c.dim, range: cr }), v => agg(v, m), r => r[c.dim]));
+  let data = [...cur].filter(([k]) => k != null && prev.get(k) > (c.minBase || 0)).map(([k, v]) => ({ k, cur: v, prev: prev.get(k) }));
+  data.sort((a, b) => b.cur - a.cur);
+  data = data.slice(0, c.top || 15);
+  data.forEach(d => { d.ch = m.format === "percent" ? d.cur - d.prev : d.cur / d.prev - 1; d.up = (d.ch >= 0) === ((m.good || "up") === "up"); });
+  data.sort((a, b) => b.ch - a.ch);
+  if (!data.length) return empty(el);
+  const W = el.clientWidth, sel = hasSel(c.dim), faded = d => sel && !isSel(c.dim, d.k);
+  const ext = d3.max(data, d => Math.abs(d.ch)) || 0.01;
+  const tf = v => m.format === "percent" ? `${NF.sDec.format(v * 100)}` : NF.sPct.format(v).replace(/[,.]0%/, "%");
+  const fig = Plot.plot(basePlot({
+    width: W, height: data.length * 30 + 36, marginLeft: c.marginLeft || 44, marginRight: 8, marginTop: 24,
+    x: { domain: [-ext * 1.25, ext * 1.25], axis: "top", grid: true, label: null, tickFormat: tf, ticks: Math.max(3, Math.floor(W / 110)) },
+    y: { domain: data.map(d => d.k), label: null, tickSize: 0 },
+    marks: [
+      Plot.barX(data, { x: "ch", y: "k", fill: d => faded(d) ? C.context : d.up ? C.accent : C.neg, insetTop: 5, insetBottom: 5 }),
+      Plot.ruleX([0], { stroke: C.ink, strokeWidth: 1.25 }),
+      Plot.text(data.filter(d => d.ch >= 0), { x: "ch", y: "k", text: d => changeTxt(d.cur, d.prev, m), dx: 6, textAnchor: "start", fill: C.ink, fontSize: 13, fontWeight: 500 }),
+      Plot.text(data.filter(d => d.ch < 0), { x: "ch", y: "k", text: d => changeTxt(d.cur, d.prev, m), dx: -6, textAnchor: "end", fill: C.ink, fontSize: 13, fontWeight: 500 }),
+      Plot.tip(data, Plot.pointerY({ y: "k", x: "ch", ...tipStyle(), title: d => `${d.k}\n${T.current}: ${fmt(d.cur, m.format)}\n${compareLabel()}: ${fmt(d.prev, m.format)}\n${changeTxt(d.cur, d.prev, m)}` })),
+    ],
+  }));
+  fig.style.cursor = "pointer";
+  fig.addEventListener("click", e => { const v = fig.value; if (v) { hideTip(); toggleCat(c.dim, v.k, e.shiftKey || e.metaKey); } });
+  fig.querySelectorAll('[aria-label="bar"] rect').forEach((r, i) => data[i] && r.classList.toggle("neg", data[i].ch < 0));
+  el.append(fig); hint(el);
+};
+
+/** histogram — distribution of a row-level numeric field. {field, format?, bins?: 30, height?} */
+CHARTS.histogram = (el, c) => {
+  const rows = filterRows().filter(r => r[c.field] != null && isFinite(r[c.field]));
+  if (!rows.length) return empty(el);
+  const W = el.clientWidth, med = d3.median(rows, r => r[c.field]);
+  el.append(Plot.plot(basePlot({
+    width: W, height: c.height || 240,
+    x: { label: null, tickFormat: v => fmt(v, c.format, true) }, y: { grid: true, label: null, tickFormat: v => fmt(v, "number", true) },
+    marks: [
+      Plot.rectY(rows, Plot.binX({ y: "count" }, { x: c.field, fill: C.accent, inset: 0.5, thresholds: c.bins || 30 })),
+      Plot.ruleY([0], { stroke: C.ink }),
+      Plot.ruleX([med], { stroke: C.ink, strokeDasharray: "2,4" }),
+      Plot.text([med], { x: d => d, frameAnchor: "top", text: d => `${T.median} ${fmt(d, c.format)}`, dx: 6, textAnchor: "start", fill: C.ink, fontSize: 13, fontWeight: 500 }),
+      Plot.tip(rows, Plot.pointerX(Plot.binX({ y: "count" }, { x: c.field, thresholds: c.bins || 30, ...tipStyle() }))),
+    ],
+  })));
+};
+
+/* ======================================================================== */
+/* 7b. Survey statistics — CSAT / CES / NPS (mirrors cx.py exactly)          */
+/*   measure.ci: "wilson" → proportion num/den (Wilson score interval)       */
+/*               "nps"    → agg "nps": (Σpos − Σneg)/Σden, se from variance  */
+/*               "mean"   → num = Σscore, den = Σanswered, sumsq = Σscore² (t) */
+/*   R.stats = {minN: 30, level: .95, alpha: .05, adjust: "holm" | "none"}   */
+/*   Small groups (n < minN) are always SHOWN and flagged, never hidden.     */
+/* ======================================================================== */
+const SC = Object.assign({ minN: 30, level: 0.95, alpha: 0.05, adjust: "holm" }, META.stats || {}, R.stats || {});
+function normInv(p) {   // Acklam
+  const a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02, 1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00];
+  const b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02, 6.680131188771972e+01, -1.328068155288572e+01];
+  const c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00, -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00];
+  const d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00];
+  if (p < 0.02425) { const q = Math.sqrt(-2 * Math.log(p)); return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+  if (p > 1 - 0.02425) return -normInv(1 - p);
+  const q = p - 0.5, r = q * q;
+  return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+}
+function normCdf(x) {   // erf, Abramowitz–Stegun 7.1.26 (|err| < 1.5e-7)
+  const t = 1 / (1 + 0.3275911 * Math.abs(x) / Math.SQRT2);
+  const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x / 2);
+  return 0.5 * (1 + Math.sign(x) * y);
+}
+const ZC = normInv(1 - (1 - SC.level) / 2);
+function tCrit(df) {    // Cornish–Fisher, same as cx.t_crit
+  if (!(df > 0)) return NaN;
+  const z = ZC, g1 = (z ** 3 + z) / 4, g2 = (5 * z ** 5 + 16 * z ** 3 + 3 * z) / 96, g3 = (3 * z ** 7 + 19 * z ** 5 + 17 * z ** 3 - 15 * z) / 384,
+    g4 = (79 * z ** 9 + 776 * z ** 7 + 1482 * z ** 5 - 1920 * z ** 3 - 945 * z) / 92160;
+  return z + g1 / df + g2 / df ** 2 + g3 / df ** 3 + g4 / df ** 4;
+}
+const PCT = Math.round(SC.level * 100);
+/** the sums a CI measure needs — enough for any subset, and for its complement by subtraction */
+function sums(rows, m) {
+  const f = m.agg === "nps" ? [m.pos, m.neg, m.den] : m.ci === "mean" ? [m.num, m.den, m.sumsq] : [m.num, m.den];
+  const s = f.map(() => 0);
+  for (const r of rows) for (let i = 0; i < f.length; i++) { const v = r[f[i]]; if (v) s[i] += v; }
+  return s;
+}
+const minus = (a, b) => a.map((x, i) => x - b[i]);
+function statFrom(s, m) {
+  const none = { v: null, n: 0, lo: null, hi: null, se: null, small: true };
+  if (m.agg === "nps") {
+    const [p, d, n] = s; if (!n) return none;
+    const P = p / n, D = d / n, v = P - D, se = Math.sqrt(Math.max(0, P + D - v * v) / n);
+    return { v, n, se, lo: Math.max(-1, v - ZC * se), hi: Math.min(1, v + ZC * se), P, D, N: 1 - P - D, small: n < SC.minN };
+  }
+  if (m.ci === "mean") {
+    const [sm, n, ss] = s; if (!n) return none;
+    const v = sm / n, vr = n > 1 ? (ss - sm * sm / n) / (n - 1) : 0, se = Math.sqrt(Math.max(0, vr) / n), t = n > 1 ? tCrit(n - 1) : NaN;
+    return { v, n, se, lo: n > 1 ? v - t * se : null, hi: n > 1 ? v + t * se : null, small: n < SC.minN };
+  }
+  const [k, n] = s; if (!n) return none;
+  const p = k / n, z = ZC, den = 1 + z * z / n, c = (p + z * z / (2 * n)) / den, h = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / den;
+  return { v: p, n, se: Math.sqrt(p * (1 - p) / n), lo: c - h, hi: c + h, small: n < SC.minN };
+}
+function stat(rows, m) {
+  if (typeof m === "string") m = MEAS[m];
+  if (!m.ci) return { v: agg(rows, m), n: rows.length, lo: null, hi: null, se: null, small: false };
+  return statFrom(sums(rows, m), m);
+}
+/** two-sided z test on independent samples (group vs. rest, or period vs. previous period) */
+function diffTest(a, b) {
+  if (!a || !b || a.v == null || b.v == null || !(a.se || b.se)) return null;
+  const d = a.v - b.v, se = Math.sqrt((a.se || 0) ** 2 + (b.se || 0) ** 2);
+  if (!se) return null;
+  const z = d / se, p = 2 * (1 - normCdf(Math.abs(z)));
+  return { d, z, p, padj: p, sig: p < SC.alpha };
+}
+/** multiple comparisons: Holm step-down across one family of tests (one chart) */
+function adjust(tests) {
+  const live = tests.filter(Boolean);
+  if (SC.adjust === "none") { live.forEach(t => { t.padj = t.p; t.sig = t.p < SC.alpha; }); return tests; }
+  let run = 0;
+  live.slice().sort((a, b) => a.p - b.p).forEach((t, j, arr) => { run = Math.max(run, Math.min(1, (arr.length - j) * t.p)); t.padj = run; t.sig = run < SC.alpha; });
+  return tests;
+}
+/** per-group stats + test vs. the rest of the base; impact = share × (group − rest) */
+function groupStats(rows, m, dim) {
+  const tot = sums(rows, m), all = statFrom(tot, m);
+  const out = d3.rollups(rows, v => sums(v, m), r => r[dim]).filter(([k]) => k != null).map(([k, s]) => {
+    const st = statFrom(s, m), rest = statFrom(minus(tot, s), m);
+    return { k, dim, ...st, rest: rest.v, test: diffTest(st, rest), share: all.n ? st.n / all.n : 0 };
+  }).filter(d => d.n > 0);
+  adjust(out.map(d => d.test));
+  out.forEach(d => { d.sig = !!d.test?.sig; d.dir = d.sig ? Math.sign(d.test.d) : 0; d.impact = d.rest != null && d.v != null ? d.share * (d.v - d.rest) : null; });
+  return { all, groups: out };
+}
+const fmtDiff = (d, m) => d == null ? "—" : m.format === "percent" ? `${NF.sDec.format(d * 100)} ${T.pp}` : m.format === "nps" ? `${NF.sDec.format(d * 100)} pts` : NF.sDec2.format(d);
+const fmtP = p => p < 0.001 ? `p < ${(0.001).toLocaleString(LANG)}` : `p = ${nf({ minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(p)}`;
+const ciTxt = (s, m) => s.lo == null ? "" : s.lo < 0 ? `${T.ci} ${PCT}%: ${T.ciFrom} ${fmt(s.lo, m.format)} ${T.ciTo} ${fmt(s.hi, m.format)}` : `${T.ci} ${PCT}%: ${fmt(s.lo, m.format)}–${fmt(s.hi, m.format)}`;
+const ciHalf = (s, m) => s.lo == null ? "" : `±${m.format === "nps" ? NF.int.format((s.hi - s.lo) / 2 * 100) : m.format === "percent" ? NF.dec1.format((s.hi - s.lo) / 2 * 100) : NF.dec.format((s.hi - s.lo) / 2)}`;
+const nTxt = n => `n = ${fmt(n)}`;
+/** wording comes from the test: a difference is only called "maior/menor" when it is significant */
+const sigTxt = t => !t ? T.noTest : `${t.sig ? T.sigYes : T.sigNo} (${fmtP(t.padj ?? t.p)}${t.padj != null && t.padj !== t.p ? ", Holm" : ""})`;
+const isGood = (m, d) => ((m.good || "up") === "up") === (d > 0);
+const smallBadge = s => s.small ? `<i class="small-badge" title="${esc(T.smallHint)}">${esc(T.smallSample)}</i>` : "";
+const smallTip = s => s.small ? `<br><span class="warn">◌ ${esc(T.smallSample)} (n < ${SC.minN}) — ${esc(T.smallHint)}</span>` : "";
+function statTip(title, s, m, extra = "") {
+  return `<b>${esc(title)}</b><br>${esc(m.label)}: ${fmt(s.v, m.format)}${s.lo != null ? `<br><span class="k">${ciTxt(s, m)}</span>` : ""}<br><span class="k">${nTxt(s.n)}</span>${extra}${smallTip(s)}`;
+}
+const vsRestTip = (d, m) => d.test ? `<br>${esc(T.vsRest)}: ${fmtDiff(d.test.d, m)} — ${esc(sigTxt(d.test))}` : "";
+const plainTip = h => h.replace(/<br>/g, "\n").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+function sigLegend(m, extra = "") {
+  return `<div class="legend-inline sig-legend"><span><i class="dot" style="background:${C.pos}"></i>${esc(T.sigBetter)}</span><span><i class="dot" style="background:${C.neg}"></i>${esc(T.sigWorse)}</span><span><i class="dot" style="background:${C.muted}"></i>${esc(T.ns)}</span><span><i class="dot hollow"></i>${esc(T.smallSample)} (n < ${SC.minN})</span>${extra}</div>`;
+}
+const sigColor = (m, d) => !d.sig ? C.muted : isGood(m, d.test.d) ? C.pos : C.neg;
+function rowTip(n, html) { n.onmouseenter = e => showTip(e, html); n.onmousemove = moveTip; n.onmouseleave = hideTip; }
+
+/** likert — diverging stacked distribution of a row-level score (1–5, 1–7, 0–10), overall + per group.
+ *  Bad answers stack left of the center line, good ones right, the neutral point straddles it.
+ *  {field, scale: [1, 5], dim?, top?: 12, labels?: {"1": "Muito insatisfeito", …}, reverse?: false (true when LOW = good)} */
+CHARTS.likert = (el, c) => {
+  const rows = filterRows({ except: c.dim }).filter(r => r[c.field] != null);
+  if (!rows.length) return empty(el);
+  const [lo, hi] = c.scale || [1, 5], pts = d3.range(lo, hi + 1), K = pts.length, odd = K % 2 === 1, half = Math.floor(K / 2);
+  const ord = c.reverse ? pts.map((_, i) => K - 1 - i) : pts.map((_, i) => i);            // index order from worst to best
+  const ramp = d3.piecewise(d3.interpolateLab, C.dv);
+  const colOf = new Map(ord.map((i, j) => [i, odd && j === half ? C.dv[2] : d3.color(ramp(K === 1 ? 0.5 : j / (K - 1))).formatHex()]));
+  const inkOf = i => { const col = d3.color(colOf.get(i)); return col && d3.hsl(col).l < 0.55 ? "#fff" : "#000"; };
+  const lab = i => (c.labels && (c.labels[pts[i]] ?? c.labels[String(pts[i])])) || String(pts[i]);
+  const bad = ord.slice(0, half), good = ord.slice(K - half), neu = odd ? ord[half] : null;
+  const dist = (k, rs, extra = {}) => {
+    const cnt = pts.map(() => 0);
+    for (const r of rs) { const i = Math.round(r[c.field]) - lo; if (i >= 0 && i < K) cnt[i]++; }
+    const n = d3.sum(cnt), sh = cnt.map(x => n ? x / n : 0);
+    const L = d3.sum(bad, i => sh[i]) + (neu != null ? sh[neu] / 2 : 0), Rt = d3.sum(good, i => sh[i]) + (neu != null ? sh[neu] / 2 : 0);
+    return { k, n, cnt, sh, L, R: Rt, goodSh: d3.sum(good, i => sh[i]), badSh: d3.sum(bad, i => sh[i]), small: n < SC.minN, ...extra };
+  };
+  let groups = [dist(T.overall, rows, { all: true })];
+  if (c.dim) groups = groups.concat(d3.groups(rows, r => r[c.dim]).filter(([k]) => k != null).map(([k, v]) => dist(k, v)).sort((a, b) => b.goodSh - a.goodSh || b.n - a.n).slice(0, c.top || 12));
+  const M = d3.max(groups, g => Math.max(g.L, g.R)) || 1;
+  const box = document.createElement("div");
+  box.className = "lk" + (hasSel(c.dim) ? " has-sel" : "");
+  box.innerHTML = `<div class="legend-inline lk-legend">${ord.map(i => `<span><i style="background:${colOf.get(i)}"></i>${esc(lab(i))}</span>`).join("")}</div>`;
+  groups.forEach((g, gi) => {
+    const row = document.createElement(g.all ? "div" : "button");
+    row.className = "lk-row" + (g.all ? " all" : "") + (g.small ? " small" : "") + (!g.all && isSel(c.dim, g.k) ? " sel" : "");
+    row.style.setProperty("--d", `${Math.min(gi * 60, 600) * MK}ms`);
+    const seg = i => `<i data-i="${i}" style="flex-grow:${g.sh[i] * (i === neu ? 0.5 : 1)};background:${colOf.get(i)};color:${inkOf(i)}">${g.sh[i] * (i === neu ? 0.5 : 1) >= 0.07 && i !== neu ? NF.pct0.format(g.sh[i]) : ""}</i>`;
+    const left = [...bad, ...(neu != null ? [neu] : [])], right = [...(neu != null ? [neu] : []), ...good];
+    row.innerHTML = `<span class="lk-lab"><span class="lbl">${esc(g.k)}</span><span class="n">${nTxt(g.n)}</span>${smallBadge(g)}</span>
+      <span class="lk-bar"><span class="lk-track"><span class="lk-side neg" style="width:${g.L / M * 50}%">${left.map(seg).join("")}</span><span class="lk-side pos" style="width:${g.R / M * 50}%">${right.map(seg).join("")}</span>
+      <span class="lk-tot neg" style="right:calc(50% + ${g.L / M * 50}% + 6px)">${NF.pct0.format(g.badSh)}</span><span class="lk-tot pos" style="left:calc(50% + ${g.R / M * 50}% + 6px)">${NF.pct0.format(g.goodSh)}</span></span></span>`;
+    row.querySelectorAll(".lk-side i").forEach(n => {
+      const i = +n.dataset.i;
+      rowTip(n, `<b>${esc(g.k)}</b><br>${esc(lab(i))}: ${fmt(g.sh[i], "percent")} (${fmt(g.cnt[i])})<br><span class="k">${nTxt(g.n)}</span>${smallTip(g)}`);
+    });
+    if (!g.all) { row.setAttribute("aria-pressed", String(isSel(c.dim, g.k))); row.onclick = e => { hideTip(); toggleCat(c.dim, g.k, e.shiftKey || e.metaKey || e.ctrlKey); }; }
+    box.append(row);
+  });
+  el.append(box); if (c.dim) hint(el);
+};
+
+/** nps — NPS composition: detractors | passives | promoters as a 100% bar, NPS ± CI and n on the right.
+ *  {measure: an agg "nps" measure, dim?, top?: 12}. Groups are tested against the rest of the base (Holm). */
+CHARTS.nps = (el, c) => {
+  const m = MEAS[c.measure], rows = filterRows({ except: c.dim });
+  const all = statFrom(sums(rows, m), m);
+  if (!all.n) return empty(el);
+  let groups = [{ k: T.overall, all: true, ...all }];
+  if (c.dim) groups = groups.concat(groupStats(rows, m, c.dim).groups.sort((a, b) => b.v - a.v).slice(0, c.top || 12));
+  const box = document.createElement("div");
+  box.className = "np" + (hasSel(c.dim) ? " has-sel" : "");
+  const cols = [C.dv[0], C.dv[2], C.dv[4]], inks = [C.dvInk[0], C.dvInk[2], C.dvInk[4]];
+  box.innerHTML = `<div class="legend-inline"><span><i style="background:${cols[0]}"></i>${esc(T.detractors)} (0–6)</span><span><i style="background:${cols[1]}"></i>${esc(T.passives)} (7–8)</span><span><i style="background:${cols[2]}"></i>${esc(T.promoters)} (9–10)</span></div>`
+    + (c.dim ? sigLegend(m) : "");
+  groups.forEach((g, gi) => {
+    const row = document.createElement(g.all ? "div" : "button");
+    row.className = "np-row" + (g.all ? " all" : "") + (g.small ? " small" : "") + (!g.all && isSel(c.dim, g.k) ? " sel" : "");
+    row.style.setProperty("--d", `${Math.min(gi * 60, 600) * MK}ms`);
+    const parts = [g.D, g.N, g.P];
+    const mark = g.all ? "" : `<span class="np-mark" style="color:${g.small && !g.sig ? C.muted : sigColor(m, g)}" title="${esc(sigTxt(g.test))}">${g.sig ? (g.test.d > 0 ? "▲" : "▼") : "≈"}</span>`;
+    row.innerHTML = `<span class="lk-lab"><span class="lbl">${esc(g.k)}</span><span class="n">${nTxt(g.n)}</span>${smallBadge(g)}</span>
+      <span class="np-bar">${parts.map((p, i) => `<i style="flex-grow:${p};background:${cols[i]};color:${inks[i]}">${p >= 0.08 ? NF.pct0.format(p) : ""}</i>`).join("")}</span>
+      <span class="np-val">${mark}<b>${fmt(g.v, "nps")}</b><small>${ciHalf(g, m)}</small></span>`;
+    rowTip(row, statTip(g.k, g, m, `<br><span class="k">${esc(T.promoters)} ${fmt(g.P, "percent")} · ${esc(T.passives)} ${fmt(g.N, "percent")} · ${esc(T.detractors)} ${fmt(g.D, "percent")}</span>${g.all ? "" : vsRestTip(g, m)}`));
+    if (!g.all) { row.setAttribute("aria-pressed", String(isSel(c.dim, g.k))); row.onclick = e => { hideTip(); toggleCat(c.dim, g.k, e.shiftKey || e.metaKey || e.ctrlKey); }; }
+    box.append(row);
+  });
+  el.append(box); if (c.dim) hint(el);
+};
+
+/** ci — metric by segment, ranked, with confidence-interval whiskers, n, and the overall value + band.
+ *  {measure (with ci), dim, top?: 15, sort?: "value" | "n", marginLeft?}
+ *  Filled dot = significantly different from the rest of the base (Holm); grey = not significant;
+ *  hollow + dashed whisker = small sample (n < minN) — shown, never hidden. */
+CHARTS.ci = (el, c) => {
+  const m = MEAS[c.measure], rows = filterRows({ except: c.dim });
+  const { all, groups } = groupStats(rows, m, c.dim);
+  if (!all.n || !groups.length) return empty(el);
+  let data = groups.slice().sort((a, b) => c.sort === "n" ? b.n - a.n : b.v - a.v);
+  if (data.length > (c.top || 15)) data = data.slice(0, c.top || 15);
+  const W = el.clientWidth, sel = hasSel(c.dim), faded = d => sel && !isSel(c.dim, d.k);
+  const lo = d3.min(data, d => d.lo ?? d.v), hi = d3.max(data, d => d.hi ?? d.v), pad = (hi - lo) * 0.08 || 0.02;
+  const dom = m.format === "percent" ? [Math.max(0, lo - pad), Math.min(1, hi + pad)] : m.format === "nps" ? [Math.max(-1, lo - pad), Math.min(1, hi + pad)] : [lo - pad, hi + pad];
+  const narrow = W < 560, ml = c.marginLeft || (narrow ? 96 : 150), mr = narrow ? 58 : 132;
+  const tip = d => plainTip(statTip(d.k, d, m, vsRestTip(d, m)));
+  const fig = Plot.plot(basePlot({
+    width: W, height: data.length * 32 + 52, marginLeft: ml, marginRight: mr, marginTop: 30,
+    x: { domain: dom, axis: "top", grid: true, label: null, tickFormat: v => fmt(v, m.format, true), ticks: Math.max(3, Math.floor((W - ml - mr) / 90)) },
+    y: { domain: data.map(d => d.k), label: null, tickSize: 0, tickFormat: k => narrow && String(k).length > 13 ? String(k).slice(0, 12) + "…" : k },
+    marks: [
+      all.lo != null ? Plot.rectX([all], { x1: "lo", x2: "hi", fill: C.accent, fillOpacity: 0.22 }) : null,
+      Plot.ruleX([all.v], { stroke: C.ink, strokeDasharray: "3,3", strokeOpacity: 0.8 }),
+      Plot.text([all], { x: "v", frameAnchor: "bottom", dy: 14, text: () => `${T.overall} ${fmt(all.v, m.format)}`, fill: C.muted, fontSize: 12, textAnchor: "middle" }),
+      Plot.ruleY(data, { y: "k", x1: d => d.lo ?? d.v, x2: d => d.hi ?? d.v, stroke: d => faded(d) ? C.context : d.small ? C.muted : sigColor(m, d), strokeWidth: 2.5, strokeDasharray: d => d.small ? "3,3" : null }),
+      Plot.dot(data, { y: "k", x: "v", r: 6, fill: d => faded(d) ? C.context : d.small ? C.bg : sigColor(m, d), stroke: d => faded(d) ? C.context : d.small ? C.muted : C.ink, strokeWidth: 1.5 }),
+      Plot.text(data, { y: "k", frameAnchor: "right", dx: mr - 4, textAnchor: "end", text: d => narrow ? fmt(d.v, m.format, true) : `${fmt(d.v, m.format)} · n ${fmt(d.n, "number", true)}${d.small ? " ◌" : ""}`, fill: d => d.small ? C.muted : C.ink, fontSize: 13, fontWeight: 500 }),
+      Plot.tip(data, Plot.pointerY({ y: "k", x: "v", ...tipStyle(), title: tip })),
+    ],
+  }));
+  fig.style.cursor = "pointer";
+  fig.addEventListener("click", e => { const v = fig.value; if (v) { hideTip(); toggleCat(c.dim, v.k, e.shiftKey || e.metaKey); } });
+  const leg = document.createElement("div"); leg.innerHTML = sigLegend(m, `<span><i class="ci-band" style="background:${C.accent}"></i>${esc(T.overall)} · ${esc(T.ci)} ${PCT}%</span>`);
+  el.append(leg.firstElementChild, fig); hint(el);
+};
+
+/** drivers — which segments pull the overall score down (or up), weighted by volume.
+ *  impact = share of answers × (segment − rest of the base), in the metric's unit (p.p. / pts / score).
+ *  "If this group scored like everyone else, the overall would move by −impact."
+ *  {measure (with ci), dims: [dim, …], top?: 12}. Not significant → grey; small sample → lighter + ◌. */
+CHARTS.drivers = (el, c) => {
+  const m = MEAS[c.measure];
+  let data = [];
+  for (const dim of c.dims || []) data = data.concat(groupStats(filterRows({ except: dim }), m, dim).groups);
+  adjust(data.map(d => d.test));                         // one Holm family across every group shown
+  data.forEach(d => { d.sig = !!d.test?.sig; });
+  data = data.filter(d => d.impact != null && isFinite(d.impact));
+  if (!data.length) return empty(el);
+  const all = stat(filterRows(), m), top = c.top || 12;
+  data.sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact));
+  data = data.slice(0, top).sort((a, b) => (isGood(m, 1) ? a.impact - b.impact : b.impact - a.impact));
+  data.forEach(d => { d.label = `${DIMS[d.dim]?.label || d.dim}: ${d.k}`; d.bad = !isGood(m, d.impact); });
+  const W = el.clientWidth, narrow = W < 560, ext = d3.max(data, d => Math.abs(d.impact)) || 0.01;
+  const tf = v => m.format === "percent" ? NF.sDec.format(v * 100) : m.format === "nps" ? NF.sDec.format(v * 100) : NF.sDec2.format(v);
+  const unit = m.format === "percent" ? ` ${T.pp}` : m.format === "nps" ? " pts" : "";
+  const fill = d => !d.sig ? C.context : d.bad ? C.neg : C.pos;
+  const tip = d => plainTip(`<b>${esc(d.label)}</b><br>${esc(T.impact)}: ${tf(d.impact)}${unit}<br>${esc(m.label)}: ${fmt(d.v, m.format)} vs. ${fmt(d.rest, m.format)} ${esc(T.restShort)}<br>${esc(T.shareAnswers)}: ${fmt(d.share, "percent")} · ${nTxt(d.n)}<br>${esc(T.ifLikeRest)} ${fmt(all.v - d.impact, m.format)}<br>${esc(sigTxt(d.test))}${smallTip(d)}`);
+  const ml = narrow ? 120 : 230;
+  const fig = Plot.plot(basePlot({
+    width: W, height: data.length * 30 + 44, marginLeft: ml, marginRight: narrow ? 46 : 90, marginTop: 26,
+    x: { domain: [-ext * 1.15, ext * 1.15], axis: "top", grid: true, label: null, tickFormat: tf, ticks: Math.max(3, Math.floor((W - ml) / 110)) },
+    y: { domain: data.map(d => d.label), label: null, tickSize: 0, tickFormat: k => narrow && k.length > 18 ? k.slice(0, 17) + "…" : k },
+    marks: [
+      Plot.barX(data, { x: "impact", y: "label", fill, fillOpacity: d => d.small ? 0.5 : 1, insetTop: 5, insetBottom: 5, rx: C.radius }),
+      Plot.ruleX([0], { stroke: C.ink, strokeWidth: 1.25 }),
+      Plot.text(data.filter(d => d.impact >= 0), { x: "impact", y: "label", text: d => `${tf(d.impact)}${narrow ? "" : unit}${d.sig ? "" : " n.s."}${d.small ? " ◌" : ""}`, dx: 6, textAnchor: "start", fill: d => d.sig ? C.ink : C.muted, fontSize: 13, fontWeight: 500 }),
+      Plot.text(data.filter(d => d.impact < 0), { x: "impact", y: "label", text: d => `${tf(d.impact)}${narrow ? "" : unit}${d.sig ? "" : " n.s."}${d.small ? " ◌" : ""}`, dx: -6, textAnchor: "end", fill: d => d.sig ? C.ink : C.muted, fontSize: 13, fontWeight: 500 }),
+      Plot.tip(data, Plot.pointerY({ y: "label", x: "impact", ...tipStyle(), title: tip })),
+    ],
+  }));
+  fig.querySelectorAll('[aria-label="bar"] rect').forEach((r, i) => data[i] && r.classList.toggle("neg", data[i].impact < 0));
+  fig.style.cursor = "pointer";
+  fig.addEventListener("click", e => { const v = fig.value; if (v) { hideTip(); toggleCat(v.dim, v.k, e.shiftKey || e.metaKey); } });
+  const leg = document.createElement("div");
+  leg.innerHTML = `<div class="legend-inline"><span><i style="background:${C.neg}"></i>${esc(T.pullsDown)}</span><span><i style="background:${C.pos}"></i>${esc(T.pullsUp)}</span><span><i style="background:${C.context}"></i>n.s. = ${esc(T.ns)}</span><span>◌ ${esc(T.smallSample)}</span></div>`;
+  el.append(leg.firstElementChild, fig); hint(el);
+};
+
+/** trendci — metric over time with its confidence band; small-n periods are hollow points.
+ *  {measure (with ci), grain?: "month", height?, zero?: false}. The tooltip tests each period against the previous one. */
+CHARTS.trendci = (el, c) => {
+  const m = MEAS[c.measure], rows = filterRows(), grain = grainOf(c);
+  if (!rows.length) return empty(el);
+  const fl = GRAIN[grain];
+  const data = d3.rollups(rows, v => statFrom(sums(v, m), m), r => +fl(r[DATE])).map(([k, s]) => ({ date: new Date(k), ...s })).filter(d => d.n > 0).sort((a, b) => a.date - b.date);
+  if (!data.length) return empty(el);
+  data.forEach((d, i) => { d.test = i ? diffTest(d, data[i - 1]) : null; });
+  const W = el.clientWidth, H = c.height || Math.round(Math.max(240, Math.min(340, W * 0.42))), narrow = W < 560;
+  const tip = d => plainTip(statTip(fmtPeriod(d.date, grain), d, m, d.test ? `<br>${esc(T.vsPrevPoint)}: ${fmtDiff(d.test.d, m)} — ${esc(sigTxt(d.test))}` : ""));
+  const last = data.at(-1);
+  el.append(Plot.plot(basePlot({
+    width: W, height: H, marginRight: narrow ? 14 : 70, marginTop: 30,
+    x: { type: "utc", label: null, ticks: Math.max(3, Math.floor(W / 90)), tickFormat: timeTick },
+    y: { grid: true, label: null, nice: true, zero: c.zero ?? false, tickFormat: v => fmt(v, m.format, true), ticks: 5 },
+    marks: [
+      Plot.areaY(data, { x: "date", y1: d => d.lo ?? d.v, y2: d => d.hi ?? d.v, fill: C.accent, fillOpacity: 0.32, curve: "monotone-x" }),
+      Plot.lineY(data, { x: "date", y: "v", stroke: C.line, strokeWidth: 1.75, curve: "monotone-x" }),
+      Plot.dot(data, { x: "date", y: "v", r: d => d.small ? 4 : 3, fill: d => d.small ? C.bg : C.line, stroke: d => d.small ? C.muted : C.line, strokeWidth: 1.25 }),
+      Plot.text([last], { x: "date", y: "v", text: d => fmt(d.v, m.format), dx: narrow ? 0 : 8, dy: narrow ? -14 : 0, textAnchor: narrow ? "end" : "start", fill: C.ink, fontWeight: 500, fontSize: 14, stroke: C.bg, strokeWidth: 4, paintOrder: "stroke" }),
+      Plot.ruleX(data, Plot.pointerX({ x: "date", stroke: C.ink, strokeOpacity: 0.5 })),
+      Plot.tip(data, Plot.pointerX({ x: "date", y: "v", ...tipStyle(), title: tip })),
+    ],
+  })));
+  const leg = document.createElement("div");
+  leg.className = "legend-inline";
+  leg.innerHTML = `<span><i class="ci-band" style="background:${C.accent}"></i>${esc(T.ci)} ${PCT}%</span><span><i class="dot hollow"></i>${esc(T.smallSample)} (n < ${SC.minN})</span>`;
+  el.prepend(leg);
+};
+
+/** themes — open-text comments grouped into themes (computed offline in cx.py, stored as a dim).
+ *  Per theme: comments and share, sentiment by score band (100% bar), the metric among those
+ *  respondents vs. the rest (tested), and PII-scrubbed sample quotes (static, full period).
+ *  {dim: "tema", band: "faixa_nps", bands?: ["Detratores", "Neutros", "Promotores"], measure?, top?: 12,
+ *   verbatims?: {theme: [{text, band}]}, terms?: {theme: [..]}, exclude?: ["Sem tema específico"]} */
+CHARTS.themes = (el, c) => {
+  const m = c.measure ? MEAS[c.measure] : null;
+  const rows = filterRows({ except: c.dim }).filter(r => r[c.dim] != null);
+  if (!rows.length) return empty(el);
+  const N = rows.length, bands = c.bands || [...new Set(rows.map(r => r[c.band]).filter(v => v != null))];
+  const bcol = bands.length === 3 ? [C.dv[0], C.dv[2], C.dv[4]] : bands.map((_, i) => C.pal[i % C.pal.length]);
+  const binks = bands.length === 3 ? [C.dvInk[0], C.dvInk[2], C.dvInk[4]] : bands.map(() => C.ink);
+  const gs = m ? new Map(groupStats(rows, m, c.dim).groups.map(g => [g.k, g])) : new Map();
+  let data = d3.groups(rows, r => r[c.dim]).map(([k, v]) => {
+    const cnt = bands.map(b => v.filter(r => r[c.band] === b).length), nb = d3.sum(cnt);
+    return { k, n: v.length, share: v.length / N, sh: cnt.map(x => nb ? x / nb : 0), nb, st: gs.get(k), small: v.length < SC.minN };
+  }).sort((a, b) => b.n - a.n);
+  const excl = new Set(c.exclude || []), maxShare = d3.max(data, d => d.share) || 1;
+  data = data.filter(d => !excl.has(d.k)).slice(0, c.top || 12).concat(data.filter(d => excl.has(d.k)));
+  const box = document.createElement("div");
+  box.className = "th" + (hasSel(c.dim) ? " has-sel" : "");
+  box.innerHTML = `<div class="th-head"><span>${esc(T.theme)}</span><span>${esc(T.commentsCount)}</span><span>${esc(T.bandSplit)}</span>${m ? `<span class="r">${esc(m.label)}</span>` : ""}</div>`
+    + `<div class="legend-inline">${bands.map((b, i) => `<span><i style="background:${bcol[i]}"></i>${esc(b)}</span>`).join("")}</div>`;
+  data.forEach((d, i) => {
+    const row = document.createElement("div");
+    row.className = "th-row" + (d.small ? " small" : "") + (isSel(c.dim, d.k) ? " sel" : "") + (excl.has(d.k) ? " other" : "");
+    row.style.setProperty("--d", `${Math.min(i * 60, 600) * MK}ms`);
+    const quotes = (c.verbatims || {})[d.k] || [], terms = (c.terms || {})[d.k] || [];
+    const st = d.st, mark = st && !excl.has(d.k) ? `<span class="np-mark" style="color:${st.small && !st.sig ? C.muted : sigColor(m, st)}">${st.sig ? (st.test.d > 0 ? "▲" : "▼") : "≈"}</span>` : "";
+    row.innerHTML = `<button class="th-main" aria-pressed="${isSel(c.dim, d.k)}">
+        <span class="th-name"><b>${esc(d.k)}</b>${terms.length ? `<small>${esc(terms.join(" · "))}</small>` : ""}${smallBadge(d)}</span>
+        <span class="th-count"><span class="th-share"><i style="width:${d.share / maxShare * 100}%"></i></span><span class="num">${fmt(d.n)} <small>${fmt(d.share, "percent")}</small></span></span>
+        <span class="th-bands">${d.sh.map((p, j) => `<i style="flex-grow:${p};background:${bcol[j]};color:${binks[j]}">${p >= 0.12 ? NF.pct0.format(p) : ""}</i>`).join("")}</span>
+        ${m ? `<span class="th-val">${mark}${st ? fmt(st.v, m.format) : "—"}</span>` : ""}
+      </button>${quotes.length ? `<ul class="th-quotes">${quotes.slice(0, c.quotes || 2).map(q => `<li>“${esc(q.text)}”${q.band ? ` <small>— ${esc(q.band)}</small>` : ""}</li>`).join("")}</ul>` : ""}`;
+    const main = row.querySelector(".th-main");
+    rowTip(main, `<b>${esc(d.k)}</b><br>${fmt(d.n)} ${esc(T.commentsWord)} · ${fmt(d.share, "percent")} ${esc(T.ofComments)}<br><span class="k">${bands.map((b, j) => `${esc(b)} ${fmt(d.sh[j], "percent")}`).join(" · ")}</span>${st ? `<br>${esc(m.label)}: ${fmt(st.v, m.format)}${st.lo != null ? ` (${ciTxt(st, m)})` : ""}${vsRestTip(st, m)}` : ""}${smallTip(d)}`);
+    main.onclick = e => { hideTip(); toggleCat(c.dim, d.k, e.shiftKey || e.metaKey || e.ctrlKey); };
+    box.append(row);
+  });
+  if (Object.keys(c.verbatims || {}).length) box.insertAdjacentHTML("beforeend", `<p class="th-note">${esc(T.quotesNote)}</p>`);
+  el.append(box); hint(el);
+};
+
+function empty(el, msg = T.empty) { el.innerHTML = `<div class="empty">${esc(msg)}</div>`; }
+function hint(el) { if (!el.parentElement.querySelector(".hint")) el.insertAdjacentHTML("afterend", `<div class="hint">${esc(T.clickHint)}</div>`); }
+
+/* ======================================================================== */
+/* 8. Static scaffolding (masthead, insights, sections, filter bar, method)  */
+/* ======================================================================== */
+const $ = s => document.querySelector(s);
+function scaffold() {
+  const brandName = META.brand || THEME.brand || "";
+  if (THEME.logo) { $("#brand").innerHTML = `<img class="logo" src="${THEME.logo}" alt="${esc(brandName)}" style="--logo-h:${+THEME.logoHeight || 26}px">`; }
+  else $("#brand").textContent = brandName;
+  if (META.sample) { const b = $("#sample-badge"); b.hidden = false; b.textContent = typeof META.sample === "string" ? META.sample : T.sample; }
+  $("#kicker").textContent = META.kicker || "";
+  $("#title").textContent = META.title || "";
+  $("#dek").innerHTML = md(META.subtitle || "");
+  if (!META.subtitle) $("#dek").remove();
+  const by = [];
+  if (META.source) by.push(`<span>${esc(T.source)}: <b>${esc(META.source)}</b></span>`);
+  if (DATE_EXTENT[0]) by.push(`<span>${esc(T.period)}: <b>${dFull.format(DATE_EXTENT[0])} – ${dFull.format(DATE_EXTENT[1])}</b></span>`);
+  by.push(`<span>${esc(T.generated)}: <b>${esc(META.generated || new Date().toLocaleDateString(LANG))}</b></span>`);
+  if (META.author) by.push(`<span><b>${esc(META.author)}</b></span>`);
+  if (META.sample) by.unshift(`<span class="mob-only">${esc(typeof META.sample === "string" ? META.sample : T.sample)}</span>`);
+  $("#byline").innerHTML = by.join("");
+  $("#btn-theme").onclick = () => applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+  $("#theme-label").textContent = document.documentElement.dataset.theme === "dark" ? T.light : T.dark;
+  $("#btn-print").onclick = () => window.print();   // beforeprint → preparePrint() re-renders at A4 width
+
+  // headline insights — computed upstream from the data, never invented
+  const ins = R.insights || [];
+  if (ins.length) $("#insights").innerHTML = `<p class="kicker">${esc(META.insightsKicker || T.highlights)}</p><ol>${ins.map((x, i) =>
+    `<li class="rv"><span class="n">${String(i + 1).padStart(2, "0")}</span><h3>${md(x.title)}</h3>${x.text ? `<p>${md(x.text)}</p>` : ""}</li>`).join("")}</ol>${R.insightsScope ? `<p class="scope">${esc(T.scope)} ${esc(R.insightsScope)}.</p>` : ""}`;
+  else $("#insights").remove();
+  if ($("#dek")) $("#dek").classList.add("rv");
+
+  // sections → figures; each figure keeps its spec in fig._spec
+  const host = $("#sections"), numbered = META.numberSections !== false;
+  (R.sections || []).forEach((s, si) => {
+    const sec = document.createElement("section");
+    sec.className = "section g"; sec.id = s.id || "s" + si;
+    const nn = String(si + 1).padStart(2, "0");
+    sec._label = s.toc || String(s.title || "").replace(/\*\*|_/g, "");
+    const wide = (s.charts || []).some(c => (c.span && c.span !== "full") || c.wide || c.type === "columns");
+    sec.innerHTML = `<div class="sec-rule"></div><p class="kicker sec-kicker rv">${esc(s.kicker || `${T.section} ${nn}`)}</p><div class="section-head rv"><h2>${numbered ? `${si + 1}. ` : ""}${md(s.title)}</h2>${s.question ? `<p class="q">${md(s.question)}</p>` : ""}${s.lede ? `<p class="lede">${md(s.lede)}</p>` : ""}</div><div class="grid${wide ? " wide" : ""}"></div>`;
+    const grid = sec.querySelector(".grid");
+    (s.charts || []).forEach((c, ci) => {
+      const fig = document.createElement("figure");
+      fig.className = "chart " + (c.span || "full");
+      fig.dataset.chart = c.id || `${sec.id}-${ci}`;
+      fig.dataset.type = c.type;
+      fig.setAttribute("aria-label", c.title || c.type);
+      fig.innerHTML = `<figcaption>${c.title ? `<h3>${md(c.title)}</h3>` : ""}${c.subtitle ? `<p>${md(c.subtitle)}</p>` : ""}</figcaption><div class="viz"></div>${c.note ? `<p class="note">${md(c.note)}</p>` : ""}`;
+      fig._spec = c;
+      grid.append(fig);
+    });
+    host.append(sec);
+  });
+
+  const tb = R.table || {};
+  $("#table-kicker").textContent = tb.kicker || T.tableKicker;
+  $("#table-title").textContent = tb.title || T.tableTitle;
+  $("#table-q").textContent = tb.question || T.tableQ;
+  $("#table-section")._label = tb.title || T.tableTitle;
+  $("#table-section .sec-kicker").classList.add("rv"); $("#table-section .section-head").classList.add("rv");
+  $("#t-search").placeholder = T.search; $("#t-search").setAttribute("aria-label", T.search);
+  $("#t-csv").textContent = "↓ " + T.csvView;
+  $("#t-raw").textContent = "↓ " + T.csvRaw;
+
+  // methodology & data quality — black footer
+  const M = R.methodology || {};
+  const defs = (F.measures || []).filter(m => m.description).map(m => `<dt>${esc(m.label)}</dt><dd>${md(m.description)}</dd>`).join("");
+  const list = a => `<ul>${a.map(x => `<li>${md(x)}</li>`).join("")}</ul>`;
+  $("#method .g").innerHTML = `<p class="kicker">${esc(M.kicker || T.methodTitle)}</p>
+    <div class="cols">
+      ${defs ? `<div class="rv"><h4>${esc(T.definitions)}</h4><dl>${defs}</dl></div>` : ""}
+      ${M.cleaning?.length ? `<div class="rv"><h4>${esc(T.cleaning)}</h4>${list(M.cleaning)}</div>` : ""}
+      ${M.quality?.length ? `<div class="rv"><h4>${esc(T.quality)}</h4>${list(M.quality)}</div>` : ""}
+    </div>
+    ${M.colophon ? `<p class="colophon">${md(M.colophon)}</p>` : ""}
+    <p class="bigmark" aria-hidden="true">${esc(META.brand || THEME.brand || META.title || "")}</p>`;
+  $("#method")._label = T.methodShort;
+  buildNav();
+  buildFilterBar();
+}
+
+/* ---- chapter menu (orange drop panel) + sticky TOC, both generated from the sections */
+function navTargets() { return [...document.querySelectorAll("#sections > section, #table-section, #method")]; }
+function buildNav() {
+  const targets = navTargets();
+  $("#menu-label").textContent = T.menu;
+  $("#menu-title").textContent = T.menuTitle;
+  $("#menu-close").setAttribute("aria-label", T.close);
+  $("#menu-foot").textContent = [META.brand || THEME.brand, META.source].filter(Boolean).join(" · ");
+  $("#menu-list").innerHTML = targets.map((t, i) => `<li><a href="#${t.id}" data-t="${t.id}">${esc(t._label)}<sup>${String(i + 1).padStart(2, "0")}</sup></a></li>`).join("");
+  $("#toc ol").innerHTML = targets.map(t => `<li><a href="#${t.id}" data-t="${t.id}">${esc(t._label)}</a></li>`).join("");
+  const menu = $("#menu"), btn = $("#btn-menu"), scrim = $("#scrim");
+  const setMenu = open => {
+    menu.classList.toggle("open", open); scrim.classList.toggle("on", open);
+    menu.setAttribute("aria-hidden", String(!open)); btn.setAttribute("aria-expanded", String(open));
+    if (open) { document.documentElement.classList.remove("hdr-hidden"); setTimeout(() => menu.querySelector("a")?.focus({ preventScroll: true }), 80); }
+  };
+  btn.onclick = e => { e.stopPropagation(); setMenu(!menu.classList.contains("open")); };
+  $("#menu-close").onclick = () => setMenu(false);
+  scrim.onclick = () => setMenu(false);
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && menu.classList.contains("open")) { setMenu(false); btn.focus(); } });
+  const go = e => {
+    const a = e.target.closest("a[data-t]"); if (!a) return;
+    e.preventDefault(); setMenu(false);
+    document.getElementById(a.dataset.t)?.scrollIntoView({ behavior: RM ? "auto" : "smooth", block: "start" });
+  };
+  $("#menu-list").onclick = go; $("#toc ol").onclick = go;
+}
+
+/* ---- filter bar: date presets + range inputs + categorical multi-selects + chips */
+const chevron = `<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 4.5l3 3 3-3"/></svg>`;
+function buildFilterBar() {
+  const fb = $("#filterbar"), cfg = R.filters || {};
+  fb.innerHTML = `<span class="fb-label">${PT ? "Filtros" : "Filters"}</span>`;
+  if (DATE) {
+    const seg = document.createElement("div"); seg.className = "seg"; seg.id = "presets";
+    (cfg.datePresets || ["12m", "ytd", "all"]).forEach(p => {
+      const b = document.createElement("button"); b.textContent = T[p] || p; b.dataset.p = p;
+      b.onclick = () => setRange(presetRange(p), p); seg.append(b);
+    });
+    // custom range: a locale-formatted button ("1 nov 2025 – 31 out 2026") opening native date inputs
+    const dr = document.createElement("div"); dr.className = "dd daterange";
+    dr.innerHTML = `<button aria-haspopup="true" aria-expanded="false"><span id="range-label"></span>${chevron}</button>
+      <div class="panel" role="dialog"><label>${esc(T.from)}<input type="date" id="d-from"></label><label>${esc(T.to)}<input type="date" id="d-to"></label><button class="apply">OK</button></div>`;
+    const rb = dr.querySelector("button");
+    rb.onclick = e => { e.stopPropagation(); const open = !dr.classList.contains("open"); closeAllDD(); if (open) { dr.classList.add("open"); rb.setAttribute("aria-expanded", "true"); } };
+    dr.querySelector(".panel").onclick = e => e.stopPropagation();
+    dr.querySelector(".apply").onclick = () => { onDateInput(); closeAllDD(); };
+    dr._render = () => {};
+    fb.append(seg, dr);
+    for (const id of ["d-from", "d-to"]) { const i = dr.querySelector("#" + id); i.min = iso(DATE_EXTENT[0]); i.max = iso(DATE_EXTENT[1]); }
+  }
+  for (const f of cfg.categorical || []) {
+    const key = f.field || f, label = f.label || DIMS[key]?.label || key;
+    const dd = document.createElement("div"); dd.className = "dd"; dd.dataset.field = key;
+    dd.innerHTML = `<button aria-haspopup="true" aria-expanded="false"><span>${esc(label)}</span><span class="count" hidden></span>${chevron}</button>
+      <div class="panel" role="dialog" aria-label="${esc(label)}"><input type="search" placeholder="${esc(T.search)}"><div class="opts"></div>
+      <div class="foot"><button data-a="clear">${esc(T.clear)}</button><button data-a="close">OK</button></div></div>`;
+    const btn = dd.querySelector("button"), panel = dd.querySelector(".panel"), opts = dd.querySelector(".opts"), q = dd.querySelector("input[type=search]");
+    btn.onclick = e => { e.stopPropagation(); const open = !dd.classList.contains("open"); closeAllDD(); if (open) { dd.classList.add("open"); btn.setAttribute("aria-expanded", "true"); renderOpts(); q.focus({ preventScroll: true }); } };
+    panel.onclick = e => e.stopPropagation();
+    q.oninput = renderOpts;
+    dd.querySelector("[data-a=clear]").onclick = () => setCats(key, []);
+    dd.querySelector("[data-a=close]").onclick = closeAllDD;
+    const universe = [...new Set(ROWS.map(r => r[key]))].filter(v => v != null);
+    function renderOpts() {
+      const counts = d3.rollup(filterRows({ except: key }), v => v.length, r => r[key]);
+      const all = universe.slice().sort((a, b) => (counts.get(b) || 0) - (counts.get(a) || 0) || String(a).localeCompare(String(b), LANG));
+      const qq = q.value.trim().toLowerCase();
+      opts.innerHTML = "";
+      all.filter(v => !qq || String(v).toLowerCase().includes(qq)).slice(0, 300).forEach(v => {
+        const l = document.createElement("label");
+        l.innerHTML = `<input type="checkbox" ${isSel(key, v) ? "checked" : ""}><span>${esc(v)}</span><span class="n">${fmt(counts.get(v) || 0)}</span>`;
+        l.querySelector("input").onchange = e => { const s = new Set(S.cats[key] || []); e.target.checked ? s.add(v) : s.delete(v); setCats(key, [...s]); };
+        opts.append(l);
+      });
+    }
+    dd._render = renderOpts;
+    fb.append(dd);
+  }
+  const chips = document.createElement("div"); chips.className = "chips"; chips.id = "chips";
+  const right = document.createElement("div"); right.className = "fb-right";
+  right.innerHTML = `<span class="count-txt tnum" id="count"></span><button class="linkbtn" id="clear-all" hidden>${esc(T.clearAll)}</button>`;
+  fb.append(chips, right);
+  right.querySelector("#clear-all").onclick = reset;
+  document.addEventListener("click", closeAllDD);
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeAllDD(); });
+}
+function closeAllDD() { document.querySelectorAll(".dd.open").forEach(d => { d.classList.remove("open"); d.querySelector("button").setAttribute("aria-expanded", "false"); }); }
+function onDateInput() {
+  const a = $("#d-from").value, b = $("#d-to").value; if (!a || !b) return;
+  const r = [parseDate(a), parseDate(b)]; if (r[0] > r[1]) r.reverse();
+  setRange(r, null);
+}
+function syncFilterBar() {
+  document.querySelectorAll("#presets button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.p === S.preset)));
+  if (S.range && $("#d-from")) {
+    $("#d-from").value = iso(S.range[0]); $("#d-to").value = iso(S.range[1]);
+    $("#range-label").textContent = `${dFull.format(S.range[0])} – ${dFull.format(S.range[1])}`.replace(/\./g, "").replace(/ de /g, " ");
+  }
+  document.querySelectorAll(".dd:not(.daterange)").forEach(dd => {
+    const n = S.cats[dd.dataset.field]?.size || 0, c = dd.querySelector(".count");
+    c.hidden = !n; c.textContent = n; dd.classList.toggle("active", n > 0);
+    if (dd.classList.contains("open")) dd._render();
+  });
+  const chips = $("#chips"); chips.innerHTML = "";
+  for (const [k, s] of Object.entries(S.cats)) for (const v of s) {
+    const b = document.createElement("button"); b.className = "chip";
+    b.innerHTML = `<i>${esc(DIMS[k]?.label || k)}</i>${esc(v)}<span class="x" aria-hidden="true">×</span>`;
+    b.setAttribute("aria-label", `${T.clear}: ${v}`);
+    b.onclick = e => { e.stopPropagation(); toggleCat(k, v, true); };
+    chips.append(b);
+  }
+  const anyCat = Object.values(S.cats).some(s => s.size);
+  $("#clear-all").hidden = !(anyCat || S.preset !== DEFAULT_PRESET);
+  $("#count").textContent = `${fmt(filterRows().length)} / ${fmt(ROWS.length)}`; $("#count").title = `${fmt(filterRows().length)} ${T.of} ${fmt(ROWS.length)} ${T.records}`;
+  const parts = [];
+  if (S.range) parts.push(`${T.period}: ${dFull.format(S.range[0])} – ${dFull.format(S.range[1])}`);
+  for (const [k, s] of Object.entries(S.cats)) if (s.size) parts.push(`${DIMS[k]?.label || k}: ${[...s].join(", ")}`);
+  $("#print-filters").textContent = `${T.filtersPrint}: ${parts.join(" · ") || T.noFilters}`;
+}
+
+/* ======================================================================== */
+/* 9. KPI row — value, delta vs comparison window, sparkline                 */
+/* ======================================================================== */
+function renderKPIs() {
+  const ks = R.kpis || []; if (!ks.length) { $("#kpis")?.remove(); return; }
+  const rows = filterRows(), cr = compareRange(), prevRows = cr ? filterRows({ range: cr }) : null, grain = curGrain();
+  const html = ks.map(k => {
+    const m = MEAS[k.measure];
+    if (m.ci) return kpiCI(k, m, rows, prevRows, grain);
+    const v = agg(rows, m), p = prevRows ? agg(prevRows, m) : null;
+    let delta = `<span class="delta flat">${esc(T.noBase)}</span>`;
+    if (p != null && isFinite(p) && p !== 0 && v != null) {
+      const diff = v - p, flat = Math.abs(diff) < 1e-12, good = ((m.good || k.good || "up") === "up") ? diff >= 0 : diff <= 0;
+      delta = `<span class="delta ${flat ? "flat" : good ? "good" : "bad"}"><span><span class="arr">${flat ? "→" : diff > 0 ? "▲" : "▼"}</span> ${changeTxt(v, p, m)}</span><span class="vs">${esc(compareLabel())} · ${fmt(p, m.format, true)}</span></span>`;
+    }
+    return `<div class="kpi" data-kpi="${esc(k.measure)}"><div class="label">${esc(k.label || m.label)}</div>
+      <div class="value">${fmt(v, m.format, k.compact ?? true)}</div>${delta}${DATE ? sparkline(series(rows, m, grain)) : ""}</div>`;
+  }).join("");
+  const box = $("#kpis");
+  box.innerHTML = `<div class="kpi-grid">${html}</div>`;
+  layoutKPIs();
+  // count-up: from 0 the first time the band scrolls into view, from the previous value after a filter change
+  box.querySelectorAll(".kpi .value").forEach(el => {
+    const key = el.parentElement.dataset.kpi, target = el.textContent, from = KPI_LAST.get(key);
+    KPI_LAST.set(key, target);
+    if (RM || printing) return;
+    if (!box._revealed) { el._pending = target; el.textContent = zeroLike(target); return; }
+    if (from && from !== target) countUp(el, from, target);
+  });
+}
+const KPI_LAST = new Map();
+/** survey KPI: the arrow and the colored delta appear ONLY when the change vs. the comparison window is
+ *  significant; otherwise "≈ +0,4 p.p. · dentro da margem". Always shows the CI and n; flags small samples. */
+function kpiCI(k, m, rows, prevRows, grain) {
+  const s = stat(rows, m), ps = prevRows ? stat(prevRows, m) : null, t = ps && ps.n ? diffTest(s, ps) : null;
+  let delta = `<span class="delta flat">${esc(T.noBase)}</span>`;
+  if (t) {
+    const good = isGood(m, t.d);
+    delta = t.sig
+      ? `<span class="delta ${good ? "good" : "bad"}" title="${esc(sigTxt(t))}"><span><span class="arr">${t.d > 0 ? "▲" : "▼"}</span> ${fmtDiff(t.d, m)}</span><span class="vs">${esc(compareLabel())} · ${esc(T.sigShort)}</span></span>`
+      : `<span class="delta flat" title="${esc(sigTxt(t))}"><span><span class="arr">≈</span> ${fmtDiff(t.d, m)}</span><span class="vs">${esc(compareLabel())} · ${esc(T.nsShort)}</span></span>`;
+  }
+  return `<div class="kpi${s.small ? " small" : ""}" data-kpi="${esc(k.measure)}"><div class="label">${esc(k.label || m.label)}</div>
+    <div class="value">${fmt(s.v, m.format, k.compact ?? true)}</div>${delta}<span class="kci">${s.lo != null ? `${ciTxt(s, m)} · ` : ""}${nTxt(s.n)}${s.small ? ` · ${esc(T.smallSample)}` : ""}</span>${DATE ? sparkline(series(rows, m, grain)) : ""}</div>`;
+}
+/** columns + one shared number size so the biggest KPI fits its cell (cap: theme type.kpi) */
+function layoutKPIs() {
+  const grid = $("#kpis .kpi-grid"); if (!grid) return;
+  const items = [...grid.children], n = items.length;
+  const print = document.documentElement.classList.contains("print-prep"), narrow = innerWidth <= 700 && !print;
+  const cols = narrow ? Math.min(2, n) : n === 4 && !print ? 2 : Math.min(3, n);
+  grid.style.setProperty("--kcols", cols);
+  items.forEach((k, i) => k.classList.toggle("t", i >= cols));
+  const cap = print ? Math.min(54, C.fsKpi) : C.fsKpi;
+  grid.style.setProperty("--kv", cap + "px");
+  let size = cap;
+  items.forEach(k => {
+    const v = k.querySelector(".value"), cs = getComputedStyle(k);
+    const avail = k.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const txt = v._pending || v.textContent, keep = v.textContent; v.textContent = txt;
+    if (v.scrollWidth > avail) size = Math.min(size, cap * avail / v.scrollWidth);
+    v.textContent = keep;
+  });
+  grid.style.setProperty("--kv", `${Math.max(30, Math.floor(size))}px`);
+}
+/** split "R$ 12,4 mi" into prefix / number / suffix so the tween keeps units and decimals */
+const DEC = (1.5).toLocaleString(LANG).charAt(1);
+function numParts(str) {
+  const m = String(str).match(/^(.*?)(-?\d[\d\s\u00a0\u202f.,]*\d|-?\d)(.*)$/);
+  if (!m) return null;
+  const raw = m[2], i = raw.lastIndexOf(DEC);
+  const dec = i >= 0 && /^\d{1,2}$/.test(raw.slice(i + 1)) ? raw.length - i - 1 : 0;
+  const n = parseFloat(raw.split(DEC === "," ? "." : ",").join("").replace(/[\s\u00a0\u202f]/g, "").replace(DEC, "."));
+  return { pre: m[1], n, dec, post: m[3] };
+}
+const zeroLike = s => { const p = numParts(s); return p ? p.pre + new Intl.NumberFormat(LANG, { minimumFractionDigits: p.dec, maximumFractionDigits: p.dec }).format(0) + p.post : s; };
+function countUp(el, from, to, ms = 650 * MK) {
+  const b = numParts(to); if (!b) { el.textContent = to; return; }
+  const a = numParts(from); const start = a && a.pre === b.pre && a.post === b.post ? a.n : 0;
+  const nfm = new Intl.NumberFormat(LANG, { minimumFractionDigits: b.dec, maximumFractionDigits: b.dec });
+  cancelAnimationFrame(el._raf); const t0 = performance.now();
+  const step = t => {
+    const k = Math.min(1, (t - t0) / ms), e = 1 - Math.pow(1 - k, 3);   // ease-out cubic count-up
+    el.textContent = k >= 1 ? to : b.pre + nfm.format(start + (b.n - start) * e) + b.post;
+    if (k < 1) el._raf = requestAnimationFrame(step);
+  };
+  el._raf = requestAnimationFrame(step);
+}
+function sparkline(s) {
+  s = s.filter(d => d.value != null && isFinite(d.value));   // periods with no base (rate/mean undefined) are skipped
+  if (s.length < 2) return "";
+  const w = 200, h = 26, x = d3.scaleUtc(d3.extent(s, d => d.date), [0, w]), ext = d3.extent(s, d => d.value);
+  const y = d3.scaleLinear(ext[0] === ext[1] ? [ext[0] - 1, ext[1] + 1] : ext, [h - 2, 2]);
+  const line = d3.line(d => x(d.date), d => y(d.value)).curve(d3.curveMonotoneX)(s);
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><path d="${line}" fill="none" stroke="${C.heroInk}" stroke-width="1.25" vector-effect="non-scaling-stroke"/></svg>`;
+}
+
+/* ======================================================================== */
+/* 10. Data table — group-by, search, sort, paginate, CSV export             */
+/* ======================================================================== */
+const TS = { group: "", sort: null, dir: -1, page: 0, q: "" };
+function initTable() {
+  const tb = R.table || {}, sel = $("#t-group");
+  const groups = tb.groupBy || Object.keys(DIMS);
+  sel.innerHTML = groups.map(g => `<option value="${esc(g)}">${esc(T.groupBy)}: ${esc(DIMS[g]?.label || g)}</option>`).join("") + (tb.raw !== false ? `<option value="">${esc(T.noGroup)}</option>` : "");
+  sel.setAttribute("aria-label", T.groupBy);
+  TS.group = groups[0] ?? ""; sel.value = TS.group;
+  sel.onchange = () => { TS.group = sel.value; TS.sort = null; TS.page = 0; renderTable(); };
+  $("#t-search").oninput = e => { TS.q = e.target.value.trim().toLowerCase(); TS.page = 0; renderTable(); };
+  $("#t-csv").onclick = () => downloadCSV(tableView(), "tabela");
+  $("#t-raw").onclick = () => downloadCSV({ cols: rawCols(), rows: filterRows() }, "dados-filtrados");
+}
+function rawCols() {
+  const tb = R.table || {}, labels = R.labels || {}, formats = R.formats || {};
+  const numCols = Array.isArray(R.data) ? Object.keys(R.data[0] || {}).filter(k => typeof R.data[0][k] === "number") : R.data.columns.filter(c => c.type === "num").map(c => c.key);
+  const keys = tb.columns || [DATE, ...Object.keys(DIMS), ...numCols].filter(Boolean);
+  return keys.map(k => ({ key: k, label: labels[k] || DIMS[k]?.label || MEAS[k]?.label || k,
+    num: !(k === DATE || DIMS[k]), date: k === DATE, format: formats[k] || MEAS[k]?.format || "decimal" }));
+}
+function tableView() {
+  const tb = R.table || {}, rows = filterRows();
+  let cols, out;
+  if (TS.group) {
+    const ms = (tb.measures || Object.keys(MEAS)).map(k => MEAS[k]);
+    cols = [{ key: "_k", label: DIMS[TS.group]?.label || TS.group }];
+    for (const m of ms) {
+      cols.push({ key: m.key, label: m.label, num: true, format: m.format, ci: !!m.ci });
+      if (m.ci) cols.push({ key: m.key + "__ci", label: `${T.ciCol} ${PCT}%`, num: false, noSearch: true, sortKey: m.key + "__lo",
+        render: r => r[m.key + "__lo"] == null ? "—" : `${fmt(r[m.key + "__lo"], m.format)}–${fmt(r[m.key + "__hi"], m.format)}`,
+        csv: [[m.key + "__lo", `${m.label} ${T.ciCol} ${PCT}% (inf.)`], [m.key + "__hi", `${m.label} ${T.ciCol} ${PCT}% (sup.)`], [m.key + "__sig", `${m.label} ${T.vsRest}`]] },
+        { key: m.key + "__n", label: `${T.nCol} (${m.label})`, num: true, format: "number" });
+    }
+    if (ms.some(m => m.ci)) cols.push({ key: "_small", label: T.sampleCol, num: false });
+    const gstats = Object.fromEntries(ms.filter(m => m.ci).map(m => [m.key, new Map(groupStats(rows, m, TS.group).groups.map(g => [g.k, g]))]));
+    out = d3.groups(rows, r => r[TS.group]).map(([k, v]) => {
+      const o = { _k: k ?? "—" };
+      let small = false;
+      for (const m of ms) {
+        if (!m.ci) { o[m.key] = agg(v, m); continue; }
+        const g = gstats[m.key].get(k) || stat(v, m);
+        Object.assign(o, { [m.key]: g.v, [m.key + "__lo"]: g.lo, [m.key + "__hi"]: g.hi, [m.key + "__n"]: g.n,
+          [m.key + "__dir"]: g.dir || 0, [m.key + "__sig"]: g.test ? (g.sig ? (g.test.d > 0 ? "acima" : "abaixo") : "n.s.") : "" });
+        if (g.n && g.small) small = true;
+      }
+      o._small = small ? `◌ ${T.smallSample}` : "";
+      return o;
+    });
+    if (!TS.sort) { TS.sort = ms[0]?.key; TS.dir = -1; }
+  } else { cols = rawCols(); out = rows; if (!TS.sort) { TS.sort = DATE || cols[0].key; TS.dir = -1; } }
+  if (TS.q) { const txt = cols.filter(c => !c.num && !c.noSearch); out = out.filter(r => txt.some(c => String(c.date ? iso(r[c.key]) : r[c.key] ?? "").toLowerCase().includes(TS.q))); }
+  const col = cols.find(c => c.key === TS.sort), k = col?.sortKey || TS.sort;
+  const cmp = col && !col.num && !col.date ? (a, b) => String(a[k] ?? "").localeCompare(String(b[k] ?? ""), LANG) : (a, b) => (a[k] > b[k]) - (a[k] < b[k]);
+  out = out.slice().sort((a, b) => TS.dir * cmp(a, b));
+  return { cols, rows: out };
+}
+function renderTable() {
+  const { cols, rows } = tableView(), size = (R.table || {}).pageSize || 12;
+  const pages = Math.max(1, Math.ceil(rows.length / size)); TS.page = Math.max(0, Math.min(TS.page, pages - 1));
+  const slice = rows.slice(TS.page * size, TS.page * size + size);
+  const barCol = TS.group ? cols.find(c => c.num) : null, barMax = barCol ? d3.max(rows, r => Math.abs(r[barCol.key])) || 1 : 1;
+  const sigMark = (c, r) => { const d = r[c.key + "__dir"], m = MEAS[c.key]; if (!c.ci || !d) return ""; const good = isGood(m, d); return ` <span class="tsig ${good ? "good" : "bad"}" title="${esc(T.vsRest)}: ${esc(T.sigYes)}">${d > 0 ? "▲" : "▼"}</span>`; };
+  const cell = (c, r) => c.render ? c.render(r) : c.date ? dFull.format(r[c.key]) : c.num ? fmt(r[c.key], c.format) + sigMark(c, r) : esc(r[c.key] ?? "—");
+  $("#t").innerHTML = `<thead><tr>${cols.map(c => `<th data-k="${esc(c.key)}" class="${c.num ? "num" : ""} ${TS.sort === c.key ? "sorted" : ""}" aria-sort="${TS.sort === c.key ? (TS.dir > 0 ? "ascending" : "descending") : "none"}">${esc(c.label)}<span class="arr">${TS.sort === c.key && TS.dir > 0 ? "↑" : "↓"}</span></th>`).join("")}</tr></thead>
+    <tbody>${slice.map(r => `<tr class="${r._small ? "small" : ""}">${cols.map(c => `<td class="${c.num ? "num" : ""}${c.render ? " ci" : ""}${c === barCol ? " bar-cell" : ""}">${cell(c, r)}${c === barCol ? `<span class="db" style="width:calc(${Math.abs(r[c.key]) / barMax} * (100% - 12px))"></span>` : ""}</td>`).join("")}</tr>`).join("")}</tbody>`;
+  $("#t").querySelectorAll("th").forEach(th => th.onclick = () => { const k = th.dataset.k; if (TS.sort === k) TS.dir *= -1; else { TS.sort = k; TS.dir = cols.find(c => c.key === k).num ? -1 : 1; } renderTable(); });
+  const a = rows.length ? TS.page * size + 1 : 0, b = Math.min(rows.length, (TS.page + 1) * size);
+  $("#pager").innerHTML = `<span class="tnum">${T.showing} ${fmt(a)}–${fmt(b)} ${T.of} ${fmt(rows.length)}</span><span><button id="pg-prev" ${TS.page === 0 ? "disabled" : ""}>← ${T.prev}</button> <button id="pg-next" ${TS.page >= pages - 1 ? "disabled" : ""}>${T.next} →</button></span>`;
+  $("#pg-prev").onclick = () => { TS.page--; renderTable(); };
+  $("#pg-next").onclick = () => { TS.page++; renderTable(); };
+}
+/** CSV: pt locales get ";" + decimal comma (opens correctly in Excel pt-BR); others "," + "." */
+function downloadCSV({ cols, rows }, name) {
+  const sep = PT ? ";" : ",";
+  const val = (c, r) => {
+    let v = r[c.key];
+    if (v == null) return "";
+    if (v instanceof Date) return iso(v);
+    if (typeof v === "number") return PT ? String(v).replace(".", ",") : String(v);
+    v = String(v); return /[";,\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  };
+  cols = cols.flatMap(c => c.csv ? c.csv.map(([key, label]) => ({ key, label })) : [c]);   // CI columns export as lower / upper / test
+  const csv = "\ufeff" + [cols.map(c => c.label).join(sep), ...rows.map(r => cols.map(c => val(c, r)).join(sep))].join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  a.download = `${META.slug || "relatorio"}-${name}.csv`; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+/* ======================================================================== */
+/* 11. Render loop, scroll choreography + public hooks                      */
+/* ======================================================================== */
+let printing = false;
+/** stagger SVG marks so bars/dots/cells enter one after another (60 ms steps, capped) */
+function staggerMarks(fig) {
+  for (const [sel, step, cap] of [['[aria-label="bar"] rect', 60, 720], ['[aria-label="rect"] rect', 18, 540], ['[aria-label="dot"] circle', 14, 600], ['[aria-label="cell"] rect', 8, 700]])
+    fig.querySelectorAll(".viz " + sel).forEach((n, i) => n.style.setProperty("--d", `${Math.min(i * step, cap) * MK}ms`));
+}
+function renderCharts() {
+  document.querySelectorAll("figure.chart").forEach(fig => {
+    const el = fig.querySelector(".viz"), spec = fig._spec, fn = CHARTS[spec.type];
+    el.innerHTML = "";
+    try {
+      if (!fn) throw new Error("unknown chart type: " + spec.type);
+      fn(el, spec);
+      fig.dataset.rendered = "1";
+      if (!fig._revealed) staggerMarks(fig);
+      else if (el.firstElementChild?.tagName !== "DIV" || spec.type === "multiples") { el.classList.remove("fade"); void el.offsetWidth; el.classList.add("fade"); }   // Plot re-render → soft crossfade
+    } catch (err) {
+      fig.dataset.rendered = "error";
+      el.innerHTML = `<div class="empty">⚠ ${esc(err.message)}</div>`;
+      console.error("[report] chart failed", spec, err);
+    }
+  });
+}
+function update() {
+  hideTip();
+  syncFilterBar(); renderKPIs(); renderCharts(); renderTable();
+  window.__report.state = { range: S.range && S.range.map(iso), preset: S.preset,
+    cats: Object.fromEntries(Object.entries(S.cats).filter(([, s]) => s.size).map(([k, s]) => [k, [...s]])), rows: filterRows().length };
+}
+
+/* ---- scroll reveals: each block animates once, when its top crosses 88% of the viewport */
+function reveal(n) {
+  if (n._revealed && n.classList.contains("in")) return;
+  n._revealed = true;
+  const go = () => {
+    n.classList.add("in");
+    if (n.id === "kpis") n.querySelectorAll(".kpi .value").forEach(v => { if (v._pending) { const t = v._pending; v._pending = null; RM || printing ? (v.textContent = t) : countUp(v, v.textContent, t); } });
+  };
+  RM || printing ? go() : requestAnimationFrame(() => requestAnimationFrame(go));
+}
+const IO = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { IO.unobserve(e.target); reveal(e.target); } }), { rootMargin: "0px 0px -12% 0px", threshold: 0 }) : null;
+function armReveals() {
+  document.querySelectorAll(".rv, figure.chart, #kpis").forEach(n => { if (!IO || RM) reveal(n); else IO.observe(n); });
+}
+function revealAll() {
+  document.querySelectorAll(".rv, figure.chart, #kpis").forEach(n => { IO?.unobserve(n); n._revealed = true; n.classList.add("in"); });
+  document.querySelectorAll("#kpis .kpi .value").forEach(v => { cancelAnimationFrame(v._raf); if (v._pending) { v.textContent = v._pending; v._pending = null; } else v.textContent = KPI_LAST.get(v.parentElement.dataset.kpi) || v.textContent; });
+  document.documentElement.classList.remove("intro");
+}
+
+/* ---- header hides on scroll down, returns on scroll up; TOC tracks the active section */
+function initScroll() {
+  const html = document.documentElement, toc = $("#toc"), links = [...toc.querySelectorAll("a")], targets = navTargets();
+  const kickers = [...document.querySelectorAll(".sec-kicker, .sec-rule")];
+  let lastY = scrollY, ticking = false;
+  const onScroll = () => {
+    ticking = false;
+    const y = scrollY, dy = y - lastY;
+    if (Math.abs(dy) > 6) { html.classList.toggle("hdr-hidden", dy > 0 && y > 280 && !$("#menu").classList.contains("open")); lastY = y; }
+    if (y < 80) html.classList.remove("hdr-hidden");
+    const first = targets[0], foot = $("#method");
+    const startY = first ? first.getBoundingClientRect().top : 1e9, footY = foot.getBoundingClientRect().top;
+    // the TOC steps aside while a section rule/kicker passes behind it (they share the left column)
+    const tr = toc.getBoundingClientRect();
+    const clash = kickers.some(k => { const r = k.getBoundingClientRect(); return r.bottom > tr.top - 20 && r.top < tr.bottom + 20; });
+    toc.classList.toggle("on", startY < innerHeight * 0.6 && footY > innerHeight * 0.5 && !clash);
+    let cur = null;
+    for (const t of targets) if (t.getBoundingClientRect().top < innerHeight * 0.38) cur = t.id;
+    links.forEach(a => a.classList.toggle("active", a.dataset.t === cur));
+    const span = (foot.offsetTop - (first?.offsetTop || 0)) || 1;
+    toc.style.setProperty("--p", Math.max(0, Math.min(1, (y + innerHeight * 0.38 - (first?.offsetTop || 0)) / span)).toFixed(3));
+  };
+  addEventListener("scroll", () => { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }, { passive: true });
+  onScroll();
+}
+
+/* ---- art strip: the primary measure as a dithered dot matrix (black panel) + lavender bars on orange */
+function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function drawArt() {
+  const art = $("#art"); if (!art) return;
+  const mk = (R.kpis || [])[0]?.measure || (R.sections || []).flatMap(s => s.charts || []).find(c => c.measure)?.measure || Object.keys(MEAS)[0];
+  if (!DATE || !mk || !ROWS.length || THEME.art === false) { art.remove(); return; }
+  const s = series(ROWS, MEAS[mk], grainFor(DATE_EXTENT) === "day" ? "week" : grainFor(DATE_EXTENT));
+  const ext = d3.extent(s, d => d.value), lo = Math.min(0, ext[0]), hi = ext[1] || 1;
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  const paint = (cv, bg, fgFn, cell, gap) => {
+    const w = cv.clientWidth, h = cv.clientHeight; if (!w || !h) return;
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = bg; g.fillRect(0, 0, w, h);
+    const cols = Math.floor(w / cell), rows = Math.floor(h / cell), rnd = mulberry(7);
+    for (let i = 0; i < cols; i++) {
+      const v = s[Math.min(s.length - 1, Math.floor(i / cols * s.length))].value, top = 1 - (v - lo) / (hi - lo);
+      for (let j = 0; j < rows; j++) { const yy = j / rows; fgFn(g, i * cell, j * cell, cell - gap, yy - top, rnd()); }
+    }
+  };
+  // dark panel: art-ink dots below the curve, density fading with depth; accent crest on the curve
+  const ink = d3.color(C.artInk) || d3.color("#fff"), a = (o) => { const c = ink.copy(); c.opacity = o; return c.formatRgb(); };
+  paint($("#art-l"), C.artBg || "#000", (g, x, y, sz, d, r) => {
+    if (d < -0.02) { if (r < 0.03) { g.fillStyle = a(.25); g.fillRect(x, y, sz, sz); } return; }
+    if (d < 0.04) { g.fillStyle = C.accent; g.fillRect(x, y, sz, sz); return; }
+    if (r < 0.92 - d * 0.9) { g.fillStyle = r < 0.5 ? a(1) : a(.55); g.fillRect(x, y, sz, sz); }
+  }, 7, 2);
+  // primary-color panel: the same curve as accent columns with a dithered edge
+  paint($("#art-r"), C.hero || C.primary, (g, x, y, sz, d, r) => {
+    if (d > 0.1 || (d > -0.06 && r < 0.5 + d * 4)) { g.fillStyle = d > 0.35 && r < 0.18 ? C.heroInk : C.accent; g.fillRect(x, y, sz, sz); }
+  }, 10, 0);
+}
+
+// used by verify.py; also handy in the devtools console
+window.__report = { checks: R.checks || null, stat: k => stat(ROWS, MEAS[k]), statFiltered: k => stat(filterRows(), MEAS[k]), setCats, toggleCat, reset, setRange: (a, b) => setRange([parseDate(a), parseDate(b)]), preset: p => setRange(presetRange(p), p), revealAll, state: null, ready: false };
+
+/* Print: always light, every reveal in its final state, charts re-rendered at A4 content width (~720 px) */
+let printTheme = null;
+function preparePrint() {
+  if (printTheme) return;
+  printing = true;
+  printTheme = document.documentElement.dataset.theme;
+  document.documentElement.classList.add("print-prep");
+  document.documentElement.dataset.theme = "light"; readColors();
+  revealAll(); update(); revealAll();
+}
+function endPrint() {
+  if (!printTheme) return;
+  document.documentElement.classList.remove("print-prep");
+  document.documentElement.dataset.theme = printTheme; printTheme = null; readColors();
+  update(); printing = false;
+}
+window.__report.preparePrint = preparePrint; window.__report.endPrint = endPrint;
+
+function boot() {
+  scaffold(); initTable();
+  S.preset = DEFAULT_PRESET; S.range = DATE ? presetRange(S.preset) : null;
+  booted = true; update();
+  drawArt(); armReveals(); initScroll();
+  // intro: the orange hero opens full-height, then settles and the art strip wipes in
+  if (document.documentElement.classList.contains("intro")) setTimeout(() => document.documentElement.classList.remove("intro"), 350 * MK);
+  let w = innerWidth, t;
+  addEventListener("resize", () => { if (Math.abs(innerWidth - w) < 16) return; w = innerWidth; clearTimeout(t); t = setTimeout(() => { renderCharts(); layoutKPIs(); drawArt(); }, 150); });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", e => { try { if (localStorage.getItem("report-theme")) return; } catch (x) {} applyTheme(e.matches ? "dark" : "light", false); });
+  addEventListener("beforeprint", preparePrint);
+  addEventListener("afterprint", endPrint);
+  window.__report.ready = true;
+}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+</script>
+</body>
+</html>
