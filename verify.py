@@ -18,6 +18,9 @@ Checks
     • layout grid at 1440 / 1280 / 1024 / 390 px: every block starts and ends on a column of the 12-column
       content grid (±2 px) and spans only 100 / 50 / 33 %; no horizontal overflow; the chapter menu never
       sits over the content; charts take the width the spec asked for (tablet: third → half; phone: full)
+    • header zone: hero, summary, KPIs and the (stuck) filter bar span the whole page width at 1440 / 1280 px;
+      the chapter menu is hidden + inert at the top, fades in after the header, hides again at the top, and
+      never overlaps the header, filter bar, hero or summary
 Outputs
     <name>-desktop-light.png, <name>-desktop-dark.png, <name>-mobile.png (full page)
     <name>-hero-light.png / -hero-dark.png (first viewport, good for chat previews)
@@ -343,19 +346,34 @@ def main():
           const starts = [...Array(12)].map((_, i) => L + i * (col + gap)), ends = [...Array(12)].map((_, i) => L + (i + 1) * col + i * gap);
           const spanW = { 12: W, 6: 6 * col + 5 * gap, 4: 4 * col + 3 * gap, 3: 3 * col + 2 * gap };
           const near = (v, arr) => arr.some(x => Math.abs(v - x) <= 2);
-          const BLOCKS = ['.hero .kicker', '.hero .byline', '.band #kpis', '#kpis .kpi', '.band #insights', '#insights li', '.section .sec-kicker',
-            '.section-head', '#sections .grid', 'figure.chart', '#table-section .table-tools', '#table-section .tscroll', '#table-section .pager',
-            '#method .acc', '#method .cols > *'];
-          const TEXT = ['.hero h1.title', '.band .dek', '.filterbar .inner > :first-child', '#table-section .section-head h2'];
+          // header zone (hero, filter bar, summary, KPIs, highlights): its own 12-column grid over the whole page width, pad to pad
+          const hg = document.querySelector('.hero .g'), hr = hg.getBoundingClientRect(), tracks = getComputedStyle(hg).gridTemplateColumns.replace(/\[[^\]]*\]/g, ' ').trim().split(/\s+/).map(parseFloat);
+          const WL = hr.left + tracks[0], WR = hr.right - tracks[tracks.length - 1], WW = WR - WL, wcol = (WW - 11 * gap) / 12;
+          const wstarts = [...Array(12)].map((_, i) => WL + i * (wcol + gap)), wends = [...Array(12)].map((_, i) => WL + (i + 1) * wcol + i * gap);
+          const wspanW = { 12: WW, 6: 6 * wcol + 5 * gap, 4: 4 * wcol + 3 * gap, 3: 3 * wcol + 2 * gap };
+          const ZONES = [
+            { grid: [starts, ends, spanW], edge: L, blocks: ['.section .sec-kicker', '.section-head', '#sections .grid', 'figure.chart', '#table-section .table-tools',
+                '#table-section .tscroll', '#table-section .pager', '#method .acc', '#method .cols > *'], text: ['#table-section .section-head h2'] },
+            { grid: [wstarts, wends, wspanW], edge: WL, blocks: ['.hero .kicker', '.hero .byline', '.band #kpis', '#kpis .kpi', '.band #insights', '#insights li'],
+              text: ['.hero h1.title', '.band .dek', '.filterbar .inner > :first-child'] }];
           const bad = [], widths = {}, name = el => (el.dataset.chart || el.id || el.className || el.tagName).toString().slice(0, 40);
-          for (const sel of BLOCKS) for (const el of document.querySelectorAll(sel)) {
-            if (!vis(el)) continue;
-            const r = el.getBoundingClientRect(), w = Object.entries(spanW).find(([, v]) => Math.abs(r.width - v) <= 2);
-            if (!near(r.left, starts) || !near(r.right, ends) || !w) bad.push(`${sel}[${name(el)}] ${Math.round(r.left)}→${Math.round(r.right)} (w ${Math.round(r.width)})`);
-            else { const k = sel + ':' + w[0]; widths[k] = (widths[k] || 0) + 1; }
-            if (w && w[0] === '3' && sel !== '#kpis .kpi') bad.push(`${sel}[${name(el)}] at 25 %`);
+          for (const z of ZONES) {
+            const [st, en, sw] = z.grid;
+            for (const sel of z.blocks) for (const el of document.querySelectorAll(sel)) {
+              if (!vis(el)) continue;
+              const r = el.getBoundingClientRect(), w = Object.entries(sw).find(([, v]) => Math.abs(r.width - v) <= 2);
+              if (!near(r.left, st) || !near(r.right, en) || !w) bad.push(`${sel}[${name(el)}] ${Math.round(r.left)}→${Math.round(r.right)} (w ${Math.round(r.width)})`);
+              else { const k = sel + ':' + w[0]; widths[k] = (widths[k] || 0) + 1; }
+              if (w && w[0] === '3' && sel !== '#kpis .kpi') bad.push(`${sel}[${name(el)}] at 25 %`);
+            }
+            for (const sel of z.text) for (const el of document.querySelectorAll(sel)) if (vis(el) && Math.abs(el.getBoundingClientRect().left - z.edge) > 2) bad.push(`${sel} starts at ${Math.round(el.getBoundingClientRect().left)}, edge at ${Math.round(z.edge)}`);
           }
-          for (const sel of TEXT) for (const el of document.querySelectorAll(sel)) if (vis(el) && Math.abs(el.getBoundingClientRect().left - L) > 2) bad.push(`${sel} starts at ${Math.round(el.getBoundingClientRect().left)}, content at ${Math.round(L)}`);
+          // header zone and filter bar: the whole width, pad to pad (the bar is sticky here, measured while stuck)
+          const fbi = document.querySelector('.filterbar .inner'), fr = fbi.getBoundingClientRect(), fcs = getComputedStyle(fbi);
+          const fbL = fr.left + parseFloat(fcs.paddingLeft), fbR = fr.right - parseFloat(fcs.paddingRight), fbTop = document.querySelector('.filterbar').getBoundingClientRect().top;
+          const full = { hero: [document.querySelector('.hero .kicker'), document.querySelector('.hero .byline')].every(el => !el || (Math.abs(el.getBoundingClientRect().left - WL) <= 2 && Math.abs(el.getBoundingClientRect().right - WR) <= 2)),
+            kpis: !document.querySelector('.band #kpis') || Math.abs(document.querySelector('.band #kpis').getBoundingClientRect().width - WW) <= 2,
+            filters: Math.abs(fbL - WL) <= 2 && Math.abs(fbR - WR) <= 2, stuck: fbTop <= parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hdr-h')) + 1 };
           const SP = { full: 12, half: 6, third: 4 }, vw = innerWidth;
           // expected span: the spec width, adapted to the breakpoint, then rows packed (one width per row; a short row widens)
           const pack = sp => { const out = []; for (let i = 0; i < sp.length;) { const s = sp[i], per = 12 / s; let j = i; while (j < sp.length && j - i < per && sp[j] === s) j++; for (let q = i; q < j; q++) out.push(j - i === per ? s : 12 / (j - i)); i = j; } return out; };
@@ -365,7 +383,9 @@ def main():
             return figs.map((f, i) => ({ id: f.dataset.chart, want: want[i], got: Math.round(f.getBoundingClientRect().width / (spanW[12] / 12)) }));
           });
           const toc = document.querySelector('#toc'), tr = toc.getBoundingClientRect(), tocOn = vis(toc) && getComputedStyle(toc).display !== 'none' && getComputedStyle(toc).opacity !== '0';
-          return { L, W, gap, bad, widths, overflow: document.documentElement.scrollWidth - innerWidth,
+          const hits = [...document.querySelectorAll('.hdr, .filterbar, .hero, .band')].filter(el => { if (!tocOn) return false; const r = el.getBoundingClientRect();
+            return r.bottom > 0 && r.top < innerHeight && !(el.matches('.hdr') && document.documentElement.classList.contains('hdr-hidden')) && r.bottom > tr.top && r.top < tr.bottom && r.right > tr.left && r.left < tr.right; }).map(el => el.className.split(' ')[0]);
+          return { L, W, gap, WL, WR, bad, widths, full, hits, overflow: document.documentElement.scrollWidth - innerWidth,
                    spanOff: spans.filter(s => Math.abs(s.got * spanW[12] / 12 - (spanW[s.want])) > spanW[12] * 0.08).map(s => `${s.id}: ${s.got}/12 ≠ ${s.want}/12`),
                    toc: tocOn ? { left: tr.left, right: tr.right } : null };
         }"""
@@ -374,8 +394,25 @@ def main():
             ctx, page, errs = open_page(viewport={"width": vw, "height": 844 if mob else 900}, device_scale_factor=2 if mob else 1, is_mobile=mob, has_touch=mob,
                                         color_scheme="light", reduced_motion="reduce")
             page.evaluate("window.__report.revealAll()")
+            TOC_JS = "(() => { const t = document.querySelector('#toc'), cs = getComputedStyle(t); return { shown: cs.display !== 'none' && cs.visibility !== 'hidden' && +cs.opacity > 0.01, inert: t.inert, aria: t.getAttribute('aria-hidden') }; })()"
+            page.evaluate("window.scrollTo(0, 0)"); page.wait_for_timeout(400)
+            top = page.evaluate(TOC_JS)
+            top_over = page.evaluate("document.documentElement.scrollWidth - innerWidth")
             page.evaluate("document.querySelector('#sections > section').scrollIntoView()"); page.wait_for_timeout(500)
             gr = page.evaluate(GRID_JS)
+            mid = page.evaluate(TOC_JS)
+            page.evaluate("window.scrollTo(0, 0)"); page.wait_for_timeout(400)
+            back = page.evaluate(TOC_JS)
+            if vw >= 1100:
+                ok(not top["shown"] and top["inert"] and top["aria"] == "true", f"grid {vw}px: chapter menu hidden at the top (inert, aria-hidden) ({top})")
+                ok(mid["shown"] and not mid["inert"] and mid["aria"] is None, f"grid {vw}px: chapter menu shown after scrolling past the header ({mid})")
+                ok(not back["shown"] and back["inert"], f"grid {vw}px: chapter menu hides again back at the top")
+                ok(not gr["hits"], f"grid {vw}px: chapter menu clear of header, filter bar, hero and summary" + (f" — overlaps {gr['hits']}" if gr["hits"] else ""))
+            if vw in (1440, 1280):
+                f = gr["full"]
+                ok(all(f.values()), f"grid {vw}px: header, KPIs and filter bar span the whole width ({gr['WL']:.0f}–{gr['WR']:.0f}px; filter bar stuck: {f['stuck']})"
+                   + ("" if all(f.values()) else f" — {f}"))
+            ok(top_over <= 1, f"grid {vw}px: no horizontal overflow at the top ({top_over}px)")
             ok(not gr["bad"], f"grid {vw}px: blocks on the 12-column grid (content {gr['L']:.0f}–{gr['L'] + gr['W']:.0f}px, gutter {gr['gap']:.0f}px)"
                + (f" — off-grid: {gr['bad'][:4]}" if gr["bad"] else ""))
             ok(not gr["spanOff"], f"grid {vw}px: charts at the asked width ({'all full' if mob else 'third → half' if vw < 1240 else 'full / half / third'})"
