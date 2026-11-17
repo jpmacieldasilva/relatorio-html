@@ -60,6 +60,9 @@ Shared by both: a plain header bar (brand or logo, "Sumário", theme toggle, PDF
 {
   "name": "Minha marca", "extends": "neutro",         // optional parent
   "layout": { "style": "clean", "areaOpacity": 0.14 },  // clean | blocks; fill opacity of single-series areas
+  // layout grid (px): page max width, menu rail, rail→content gap, 12-column gutter, outer padding.
+  // content max = maxWidth − 2·pad − rail − railGap (1128 px by default). All blocks span 12 / 6 / 4 columns.
+  //   "grid": { "maxWidth": 1440, "rail": 200, "railGap": 48, "gutter": 32, "pad": 32 }
   "mode": "auto",                                       // auto | light | dark (initial theme; the toggle stays)
   "brand": { "name": "Acme", "logo": "logo.svg" },      // logo: path, URL or data URI → inlined (SVG/PNG < ~100 KB)
   "fonts": {

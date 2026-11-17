@@ -421,6 +421,14 @@ def validate(data: dict) -> list[str]:
             probs.append(f"theme.palette.{k} must be a hex color")
     if (data.get("layout") or {}).get("style", "clean") not in ("clean", "blocks"):
         probs.append("theme.layout.style must be 'clean' (plain header, KPI cards, light footer) or 'blocks' (full-bleed color hero + KPI band)")
+    g = (data.get("layout") or {}).get("grid")
+    if g is not None:
+        if not isinstance(g, dict):
+            probs.append("theme.layout.grid must be an object {maxWidth, rail, railGap, gutter, pad}")
+        else:
+            for k in g:
+                if not k.startswith("_") and k not in ("maxWidth", "rail", "railGap", "gutter", "pad"):
+                    probs.append(f"theme.layout.grid: unknown key '{k}' (valid: maxWidth, rail, railGap, gutter, pad)")
     if data.get("hero", {}).get("style", "block") not in ("block", "plain"):
         probs.append("theme.hero.style must be 'block' (full-bleed color) or 'plain'")
     return probs
@@ -472,6 +480,16 @@ def resolve(theme_spec=None, base_dir: str | Path | None = None, *, legacy_meta:
     layout = data.get("layout") or {}
     area_l = _num(layout, "areaOpacity", 0.6, 0.05, 1, P, "layout")
     area_d = _num(layout, "areaOpacityDark", max(area_l, min(1, area_l * 1.4)), 0.05, 1, P, "layout")
+    # layout grid: page max width · reserved menu rail · gap rail→content · 12-column gutter · outer padding.
+    # Content column max = maxWidth − 2·pad − rail − railGap (1440 − 64 − 200 − 48 = 1128 px by default).
+    grid = layout.get("grid") or {}
+    root.update({
+        "--maxw": f"{_num(grid, 'maxWidth', 1440, 1024, 1920, P, 'layout.grid')}px",
+        "--rail": f"{_num(grid, 'rail', 200, 140, 280, P, 'layout.grid')}px",
+        "--rail-gap": f"{_num(grid, 'railGap', 48, 16, 120, P, 'layout.grid')}px",
+        "--gutter": f"{_num(grid, 'gutter', 32, 12, 64, P, 'layout.grid')}px",
+        "--pad-d": f"{_num(grid, 'pad', 32, 12, 64, P, 'layout.grid')}px",
+    })
 
     def mode_vars(mode: str) -> dict:
         m = dict(cols[mode])

@@ -15,6 +15,9 @@ Checks
       Likert / NPS / theme rows filter on click, tooltips carry the CI, small groups are flagged (never hidden)
     • table: search narrows rows, header click sorts, CSV download fires
     • theme toggle switches to dark and charts re-render without errors
+    • layout grid at 1440 / 1280 / 1024 / 390 px: every block starts and ends on a column of the 12-column
+      content grid (±2 px) and spans only 100 / 50 / 33 %; no horizontal overflow; the chapter menu never
+      sits over the content; charts take the width the spec asked for (tablet: third → half; phone: full)
 Outputs
     <name>-desktop-light.png, <name>-desktop-dark.png, <name>-mobile.png (full page)
     <name>-hero-light.png / -hero-dark.png (first viewport, good for chat previews)
@@ -65,6 +68,21 @@ def main():
         (log if okb else problems).append(("✓ " if okb else "✗ ") + f"build omits charts/sections/KPIs without data ({len(w)} warnings)")
     except Exception as e:  # noqa: BLE001
         problems.append(f"✗ build empty-chart rule could not be checked: {e}")
+    # build-time grid rule: width ∈ full|half|third; incomplete rows widen (lone half → full, 2 thirds → halves)
+    try:
+        bad = bm.validate({"fields": {"dims": [{"key": "a"}], "measures": [{"key": "v", "format": "number"}]},
+                           "sections": [{"charts": [{"type": "bars", "dim": "a", "measure": "v", "width": "quarter"}]}],
+                           "data": [{"a": "x", "v": 1}]})
+        t = {"sections": [{"id": "s", "charts": [{"type": "bars", "width": "half"}, {"type": "bars"},
+                                                  {"type": "bars", "width": "third"}, {"type": "bars", "width": "third"},
+                                                  {"type": "bars", "width": "half"}, {"type": "bars", "width": "half"},
+                                                  {"type": "heatmap", "width": "third"}]}]}
+        w = bm.layout_rows(t)
+        got = [c["width"] for c in t["sections"][0]["charts"]]
+        okg = any("width 'quarter'" in x for x in bad) and got == ["full", "full", "half", "half", "half", "half", "full"] and len(w) == 4
+        (log if okg else problems).append(("✓ " if okg else "✗ ") + f"build validates chart width and widens incomplete rows ({got}, {len(w)} warnings)")
+    except Exception as e:  # noqa: BLE001
+        problems.append(f"✗ build grid rule could not be checked: {e}")
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -316,6 +334,59 @@ def main():
             page.pdf(path=str(out / f"{stem}.pdf"), format="A4", print_background=True)
             log.append(f"✓ PDF → {out / (stem + '.pdf')}")
         ctx.close()
+
+        # ---------------- layout grid at 4 widths
+        GRID_JS = r"""() => {
+          const vis = el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'; };
+          const grid = document.querySelector('#sections .grid'), r0 = grid.getBoundingClientRect();
+          const gap = parseFloat(getComputedStyle(grid).columnGap) || 0, L = r0.left, W = r0.width, col = (W - 11 * gap) / 12;
+          const starts = [...Array(12)].map((_, i) => L + i * (col + gap)), ends = [...Array(12)].map((_, i) => L + (i + 1) * col + i * gap);
+          const spanW = { 12: W, 6: 6 * col + 5 * gap, 4: 4 * col + 3 * gap, 3: 3 * col + 2 * gap };
+          const near = (v, arr) => arr.some(x => Math.abs(v - x) <= 2);
+          const BLOCKS = ['.hero .kicker', '.hero .byline', '.band #kpis', '#kpis .kpi', '.band #insights', '#insights li', '.section .sec-kicker',
+            '.section-head', '#sections .grid', 'figure.chart', '#table-section .table-tools', '#table-section .tscroll', '#table-section .pager',
+            '#method .acc', '#method .cols > *'];
+          const TEXT = ['.hero h1.title', '.band .dek', '.filterbar .inner > :first-child', '#table-section .section-head h2'];
+          const bad = [], widths = {}, name = el => (el.dataset.chart || el.id || el.className || el.tagName).toString().slice(0, 40);
+          for (const sel of BLOCKS) for (const el of document.querySelectorAll(sel)) {
+            if (!vis(el)) continue;
+            const r = el.getBoundingClientRect(), w = Object.entries(spanW).find(([, v]) => Math.abs(r.width - v) <= 2);
+            if (!near(r.left, starts) || !near(r.right, ends) || !w) bad.push(`${sel}[${name(el)}] ${Math.round(r.left)}→${Math.round(r.right)} (w ${Math.round(r.width)})`);
+            else { const k = sel + ':' + w[0]; widths[k] = (widths[k] || 0) + 1; }
+            if (w && w[0] === '3' && sel !== '#kpis .kpi') bad.push(`${sel}[${name(el)}] at 25 %`);
+          }
+          for (const sel of TEXT) for (const el of document.querySelectorAll(sel)) if (vis(el) && Math.abs(el.getBoundingClientRect().left - L) > 2) bad.push(`${sel} starts at ${Math.round(el.getBoundingClientRect().left)}, content at ${Math.round(L)}`);
+          const SP = { full: 12, half: 6, third: 4 }, vw = innerWidth;
+          // expected span: the spec width, adapted to the breakpoint, then rows packed (one width per row; a short row widens)
+          const pack = sp => { const out = []; for (let i = 0; i < sp.length;) { const s = sp[i], per = 12 / s; let j = i; while (j < sp.length && j - i < per && sp[j] === s) j++; for (let q = i; q < j; q++) out.push(j - i === per ? s : 12 / (j - i)); i = j; } return out; };
+          const spans = [...document.querySelectorAll('#sections .grid')].flatMap(g => {
+            const figs = [...g.querySelectorAll(':scope > figure.chart:not(.is-empty)')];
+            const want = pack(figs.map(f => { const a = SP[f._spec.width || 'full']; return vw <= 700 ? 12 : vw < 1240 && a === 4 ? 6 : a; }));
+            return figs.map((f, i) => ({ id: f.dataset.chart, want: want[i], got: Math.round(f.getBoundingClientRect().width / (spanW[12] / 12)) }));
+          });
+          const toc = document.querySelector('#toc'), tr = toc.getBoundingClientRect(), tocOn = vis(toc) && getComputedStyle(toc).display !== 'none' && getComputedStyle(toc).opacity !== '0';
+          return { L, W, gap, bad, widths, overflow: document.documentElement.scrollWidth - innerWidth,
+                   spanOff: spans.filter(s => Math.abs(s.got * spanW[12] / 12 - (spanW[s.want])) > spanW[12] * 0.08).map(s => `${s.id}: ${s.got}/12 ≠ ${s.want}/12`),
+                   toc: tocOn ? { left: tr.left, right: tr.right } : null };
+        }"""
+        for vw in (1440, 1280, 1024, 390):
+            mob = vw <= 700
+            ctx, page, errs = open_page(viewport={"width": vw, "height": 844 if mob else 900}, device_scale_factor=2 if mob else 1, is_mobile=mob, has_touch=mob,
+                                        color_scheme="light", reduced_motion="reduce")
+            page.evaluate("window.__report.revealAll()")
+            page.evaluate("document.querySelector('#sections > section').scrollIntoView()"); page.wait_for_timeout(500)
+            gr = page.evaluate(GRID_JS)
+            ok(not gr["bad"], f"grid {vw}px: blocks on the 12-column grid (content {gr['L']:.0f}–{gr['L'] + gr['W']:.0f}px, gutter {gr['gap']:.0f}px)"
+               + (f" — off-grid: {gr['bad'][:4]}" if gr["bad"] else ""))
+            ok(not gr["spanOff"], f"grid {vw}px: charts at the asked width ({'all full' if mob else 'third → half' if vw < 1240 else 'full / half / third'})"
+               + (f" — {gr['spanOff'][:4]}" if gr["spanOff"] else ""))
+            ok(gr["overflow"] <= 1, f"grid {vw}px: no horizontal overflow ({gr['overflow']}px)")
+            t = gr["toc"]
+            ok(t is None or t["right"] <= gr["L"] - 8, f"grid {vw}px: chapter menu " + ("in its rail, clear of the content" + (f" ({t['left']:.0f}–{t['right']:.0f}px)" if t else "") if not vw < 1100 else "folds into the header drawer")
+               if (t is None) == (vw < 1100) or t is None else f"grid {vw}px: chapter menu overlaps the content ({t})")
+            ok((t is None) == (vw < 1100), f"grid {vw}px: chapter rail {'hidden — menu in the drawer' if vw < 1100 else 'shown'}")
+            ok(not errs, f"grid {vw}px: no console/page errors" + (f" — {errs[:3]}" if errs else ""))
+            ctx.close()
 
         # ---------------- mobile
         ctx, page, errs = open_page(viewport={"width": 390, "height": 844}, device_scale_factor=3, is_mobile=True, has_touch=True, color_scheme="light", reduced_motion="reduce")

@@ -83,10 +83,11 @@
   --ease-io: cubic-bezier(.44, 0, .56, 1);      /* link + nav color */
   --ease: var(--ease-out);
   --t-bar: calc(900ms * var(--mk)); --t-stagger: calc(60ms * var(--mk)); --t-fade: calc(.4s * var(--mk)); --t-hover: calc(200ms * var(--mk));
-  /* layout — 1440 grid: 16 | toc 234 | wide 353 | main 688 | 133 | 16 */
+  /* layout grid (theme layout.grid): pad | rail (chapter menu) | rail-gap | content: 12 columns + gutter | pad.
+     At 1440 px: 32 | 200 | 48 | 1128 | 32 — the content column never grows past maxw − 2·pad − rail − rail-gap. */
   --hdr-h: 56px;
-  --pad: 16px;
-  --maxw: 1440px;
+  --pad-d: 32px; --pad: var(--pad-d);
+  --maxw: 1440px; --rail: 200px; --rail-gap: 48px; --gutter: 32px;
 }
 [data-theme="dark"] {
   --bg: #111418;
@@ -129,12 +130,17 @@ button, input, select { font: inherit; color: inherit; letter-spacing: inherit; 
 a { color: inherit; text-underline-offset: 3px; text-decoration-thickness: 1px; transition: color calc(.2s * var(--mk)) var(--ease-io); }
 .kicker, .mono { font: 400 12px/1.2 var(--mono); letter-spacing: .02em; text-transform: uppercase; margin: 0; }
 .page { max-width: var(--maxw); margin: 0 auto; }
-/* the 6-column editorial grid used by hero, band, sections and table */
+/* ONE layout grid for hero, band, sections, table and methodology: every block sits in the content column,
+   the rail on the left is reserved for the chapter menu (fixed, never over the content). Inside the content
+   column, blocks span 12, 6 or 4 of 12 columns (100 / 50 / 33 %) with a fixed gutter — see .grid, .kpi-grid,
+   .insights ol, .method .cols and layoutGrid(). */
 .g {
   display: grid; column-gap: 0;
-  grid-template-columns: [full-start] var(--pad) [toc-start] minmax(0, 234fr) [wide-start] minmax(0, 353fr) [main-start] minmax(0, 688fr) [main-end] minmax(0, 133fr) [content-end] var(--pad) [full-end];
+  grid-template-columns: [full-start] var(--pad) [rail-start] var(--rail) [rail-end] var(--rail-gap) [content-start] minmax(0, 1fr) [content-end] var(--pad) [full-end];
 }
-.g > * { grid-column: main-start / main-end; min-width: 0; }
+.g > * { grid-column: content; min-width: 0; }
+.cols12 { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: var(--gutter); }
+.cols12 > * { grid-column: span 12; min-width: 0; }
 
 /* Header — plain bar: brand (or logo) · chapters button · theme + PDF. Hides on scroll down, returns on scroll up. */
 .hdr {
@@ -180,9 +186,9 @@ html.hdr-hidden .hdr { transform: translateY(-100%); }
 .hero { background: var(--hero); color: var(--hero-ink); padding-top: var(--hdr-h); }
 .hero .g { min-height: clamp(380px, 54vh, 560px); align-content: end; padding-bottom: 18px; transition: min-height calc(1.1s * var(--mk)) var(--ease-out); }
 html.intro .hero .g { min-height: calc(100svh - 0px); }
-.hero .kicker { grid-column: toc-start / content-end; margin-bottom: 14px; }
-.hero h1.title { grid-column: toc-start / content-end; font: var(--hw) clamp(calc(var(--fs-hero) * .4px), calc(var(--fs-hero) * .0695vw), calc(var(--fs-hero) * 1px))/var(--lh-hero) var(--heading); letter-spacing: calc(-.06em * var(--track)); margin: 0; max-width: 12.5em; text-wrap: balance; }
-.hero .byline { grid-column: toc-start / content-end; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 24px; margin-top: 18px; font-size: 14px; color: var(--hero-muted); }
+.hero .kicker { grid-column: content; margin-bottom: 14px; }
+.hero h1.title { grid-column: content; font: var(--hw) clamp(calc(var(--fs-hero) * .4px), calc(var(--fs-hero) * .0695vw), calc(var(--fs-hero) * 1px))/var(--lh-hero) var(--heading); letter-spacing: calc(-.06em * var(--track)); margin: 0; max-width: 12.5em; text-wrap: balance; }
+.hero .byline { grid-column: content; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 24px; margin-top: 18px; font-size: 14px; color: var(--hero-muted); }
 .hero .byline b { color: var(--hero-ink); font-weight: 400; }
 .hero .byline .mob-only { display: none; }
 
@@ -195,12 +201,13 @@ html.intro .art canvas { clip-path: inset(0 100% 0 0); }
 /* Statement + KPI band (blocks layout: on the primary color) */
 .band { background: var(--hero); color: var(--hero-ink); padding: 0 0 calc(var(--sp-band) * 1px); }
 .band .g { row-gap: 0; }
-.band .rule { grid-column: toc-start / content-end; border-top: 1px solid var(--hero-rule); height: 0; margin-bottom: 18px; }
-.band .dek { grid-column: toc-start / wide-end; grid-row: 2 / span 2; font: var(--hw) clamp(calc(var(--fs-dek) * .75px), calc(var(--fs-dek) * .0697vw), calc(var(--fs-dek) * 1px))/1.2 var(--heading); letter-spacing: calc(-.03em * var(--track)); margin: 0 24px 32px 0; max-width: 15em; text-wrap: pretty; }
+.band .rule { grid-column: content; border-top: 1px solid var(--hero-rule); height: 0; margin-bottom: 18px; }
+.band .dek { grid-column: content; grid-row: 1; font: var(--hw) clamp(calc(var(--fs-dek) * .75px), calc(var(--fs-dek) * .0697vw), calc(var(--fs-dek) * 1px))/1.2 var(--heading); letter-spacing: calc(-.03em * var(--track)); margin: 0 0 32px; max-width: 26em; text-wrap: pretty; }
 .band .dek b { font-weight: 500; }
-.band #kpis { grid-column: main-start / content-end; grid-row: 2; }
-.band #insights { grid-column: main-start / main-end; grid-row: 3; padding-top: 44px; }
-.kpi-grid { display: grid; grid-template-columns: repeat(var(--kcols, 3), minmax(0, 1fr)); border-bottom: 1px solid var(--hero-rule); }
+.band #kpis { grid-column: content; grid-row: 2; }
+.band #insights { grid-column: content; grid-row: 3; padding-top: 44px; }
+.kpi-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: var(--gutter); border-bottom: 1px solid var(--hero-rule); }
+.kpi-grid > .kpi { grid-column: span 4; }
 .kpi { padding: 12px 12px 18px 16px; border-left: 1px solid var(--hero-rule); min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 .kpi.t { border-top: 1px solid var(--hero-rule); }
 .kpi .value { order: 1; font: var(--hw) var(--kv, 85px)/1 var(--heading); letter-spacing: calc(-.04em * var(--track)); margin: 0 0 clamp(24px, 4vw, 64px); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -210,8 +217,8 @@ html.intro .art canvas { clip-path: inset(0 100% 0 0); }
 .kpi .delta.good .arr, .kpi .delta.bad .arr { font-size: 12px; transform: translateY(-1px); display: inline-block; }
 .kpi svg.spark { order: 4; display: block; width: 100%; height: 26px; margin-top: 14px; overflow: visible; }
 .insights .kicker { margin-bottom: 18px; }
-.insights ol { list-style: none; margin: 0; padding: 0; columns: 2 300px; column-gap: 24px; }
-.insights li { break-inside: avoid; margin: 0 0 20px; font-size: 16px; line-height: 1.4; }
+.insights ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: var(--gutter); }
+.insights li { grid-column: span 4; min-width: 0; break-inside: avoid; margin: 0 0 20px; font-size: 16px; line-height: 1.4; }
 .insights .n { font: 400 12px/1 var(--mono); display: block; margin-bottom: 6px; }
 .insights h3 { display: inline; font: 500 16px/1.4 var(--sans); margin: 0; }
 .insights h3::after { content: " "; }
@@ -225,7 +232,8 @@ html.intro .art canvas { clip-path: inset(0 100% 0 0); }
   border-bottom: var(--rule-w) solid var(--rule); transition: top calc(.5s * var(--mk)) var(--ease-out), background-color calc(.3s * var(--mk)) var(--ease-io);
 }
 html.hdr-hidden .filterbar { top: 0; }
-.filterbar .inner { max-width: var(--maxw); margin: 0 auto; display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 10px var(--pad); flex-wrap: wrap; }
+.filterbar .inner { max-width: var(--maxw); margin: 0 auto; display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 10px var(--pad) 10px calc(var(--pad) + var(--rail) + var(--rail-gap)); flex-wrap: wrap; }
+@media (max-width: 1099px) { .filterbar .inner { padding-left: var(--pad); } }
 .fb-label { font: 400 12px/1 var(--mono); text-transform: uppercase; color: var(--muted); margin-right: 4px; }
 .seg { display: inline-flex; gap: 2px; }
 .seg button { border: 1px solid transparent; background: transparent; padding: 0 12px; height: 32px; border-radius: 999px; font-size: 14px; font-weight: 500; color: var(--muted); cursor: pointer; transition: background var(--t-hover) ease, color var(--t-hover) ease; }
@@ -268,7 +276,8 @@ html.hdr-hidden .filterbar { top: 0; }
 .linkbtn[hidden] { display: none; }
 
 /* Sticky chapter TOC (left): a hairline rail, the active chapter gets a primary-color bar */
-.toc { position: fixed; left: var(--pad); top: 50%; z-index: 30; transform: translateY(-50%); width: 210px; opacity: 0; pointer-events: none; transition: opacity calc(.4s * var(--mk)) ease; }
+/* sits in the reserved rail: same left edge as the page padding, never wider than the rail */
+.toc { position: fixed; left: calc(max(0px, (100vw - var(--maxw)) / 2) + var(--pad)); top: 50%; z-index: 30; transform: translateY(-50%); width: var(--rail); max-height: calc(100vh - 2 * var(--hdr-h) - 40px); overflow-y: auto; opacity: 0; pointer-events: none; transition: opacity calc(.4s * var(--mk)) ease; }
 .toc.on { opacity: 1; pointer-events: auto; }
 .toc ol { list-style: none; margin: 0; padding: 0; }
 .toc ol { border-left: var(--rule-w) solid var(--rule); }
@@ -281,18 +290,19 @@ html.hdr-hidden .filterbar { top: 0; }
 
 /* Sections & charts ----------------------------------------------------- */
 .section { padding-top: clamp(calc(var(--sp-section) * .53px), calc(var(--sp-section) * .0667vw), calc(var(--sp-section) * 1px)); }
-.section .sec-rule { grid-column: toc-start / content-end; border-top: var(--rule-section-w) solid var(--rule-strong); margin-bottom: 18px; }
-.section .sec-kicker { grid-column: toc-start / wide-end; grid-row: 2; padding-top: 10px; }
-.section-head { grid-row: 2; margin-bottom: 44px; }
+.section .sec-rule { grid-column: content; border-top: var(--rule-section-w) solid var(--rule-strong); margin-bottom: 18px; }
+.section .sec-kicker { grid-column: content; padding: 0 0 12px; }
+.section-head { margin-bottom: 44px; }
 .section-head h2 { font: var(--hw) clamp(calc(var(--fs-h2) * .75px), calc(var(--fs-h2) * .07vw), calc(var(--fs-h2) * 1px))/1.1 var(--heading); letter-spacing: calc(-.04em * var(--track)); margin: 0; text-wrap: balance; }
 .section-head .q { font-size: 20px; line-height: 1.3; letter-spacing: -.02em; color: var(--muted); margin: 14px 0 0; }
 .section-head .lede { margin: 28px 0 0; font-size: 16px; line-height: 1.4; max-width: 34em; text-wrap: pretty; }
 .section-head .lede b { font-weight: 500; font-variant-numeric: tabular-nums; }
-.grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: calc(var(--sp-chart) * 1px) 40px; }
-.grid.wide { grid-column: wide-start / content-end; }
-.chart { margin: 0; grid-column: span 12; min-width: 0; }
-.chart.half { grid-column: span 6; } .chart.third { grid-column: span 4; } .chart.twothirds { grid-column: span 8; }
-@media (max-width: 1240px) { .grid { column-gap: 0; } .chart.half, .chart.third, .chart.twothirds { grid-column: span 12; } .grid.wide { grid-column: main-start / content-end; } }
+.grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: calc(var(--sp-chart) * 1px) var(--gutter); }
+/* width full | half | third → span 12 | 6 | 4; layoutGrid() packs rows, widens orphans and adapts per breakpoint */
+.chart { margin: 0; grid-column: span 12; min-width: 0; display: flex; flex-direction: column; }
+.chart.half { grid-column: span 6; } .chart.third { grid-column: span 4; }
+.chart > .note { margin-top: auto; padding-top: 12px; }
+.chart.is-empty { order: 99; }
 .chart figcaption { border-bottom: var(--rule-strong-w) solid var(--rule-strong); padding-bottom: 14px; }
 .chart figcaption h3 { font: var(--hw) calc(var(--fs-chart) * 1px)/1.05 var(--heading); letter-spacing: calc(-.04em * var(--track)); margin: 0; max-width: 70%; text-wrap: balance; }
 .chart.half figcaption h3, .chart.third figcaption h3 { max-width: 92%; }
@@ -495,7 +505,7 @@ table.data tr.small td { color: var(--muted); }
 #tt .k { opacity: .65; }
 
 /* Data table ------------------------------------------------------------ */
-#table-section .table-tools, #table-section .tscroll, #table-section .pager { grid-column: main-start / content-end; }
+#table-section .table-tools, #table-section .tscroll, #table-section .pager { grid-column: content; }
 .table-tools { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
 .table-tools input[type=search], .table-tools select { height: 36px; border: var(--rule-w) solid var(--rule); background: var(--surface); border-radius: 999px; padding: 0 14px; font-size: 14px; transition: border-color var(--t-hover) ease; }
 .table-tools input[type=search]:hover, .table-tools select:hover, .table-tools input[type=search]:focus { border-color: var(--ink); outline: none; }
@@ -521,8 +531,8 @@ table.data td.bar-cell .db { position: absolute; right: 6px; top: 8px; bottom: 8
 
 /* Methodology — black footer -------------------------------------------- */
 .method { margin-top: clamp(80px, 10vw, 140px); padding: 28px 0 72px; background: var(--footer-bg); color: var(--footer-ink); }
-.method .g > .kicker { grid-column: toc-start / content-end; border-bottom: 1px solid color-mix(in srgb, var(--footer-ink) 35%, transparent); padding-bottom: 14px; margin-bottom: 28px; }
-.method .acc { grid-column: toc-start / content-end; }
+.method .g > .kicker { grid-column: content; border-bottom: 1px solid color-mix(in srgb, var(--footer-ink) 35%, transparent); padding-bottom: 14px; margin-bottom: 28px; }
+.method .acc { grid-column: content; }
 .method summary { list-style: none; display: flex; align-items: center; gap: 14px; cursor: pointer; border-bottom: 1px solid color-mix(in srgb, var(--footer-ink) 35%, transparent); padding: 6px 0 14px; }
 .method summary::-webkit-details-marker { display: none; }
 .method summary .kicker { margin: 0; color: var(--footer-ink); }
@@ -535,29 +545,29 @@ table.data td.bar-cell .db { position: absolute; right: 6px; top: 8px; bottom: 8
 .method .acc-in { padding-top: 28px; }
 .method dd .mq { display: block; margin-top: 4px; color: var(--footer-ink); }
 .method dd .mq .qk { font: 400 11px/1 var(--mono); text-transform: uppercase; letter-spacing: .02em; margin-right: 8px; color: color-mix(in srgb, var(--footer-ink) 62%, transparent); }
-.method .cols { grid-column: toc-start / content-end; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 28px 40px; }
+.method .cols { grid-column: content; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 28px var(--gutter); }
+.method .cols > * { grid-column: span 4; min-width: 0; }
 .method h4 { font: 400 12px/1 var(--mono); letter-spacing: .02em; text-transform: uppercase; color: color-mix(in srgb, var(--footer-ink) 62%, transparent); margin: 0 0 16px; }
 .method ul { margin: 0; padding-left: 18px; font-size: 15px; }
 .method li { margin-bottom: 8px; }
 .method dl { margin: 0; font-size: 15px; }
 .method dt { font-weight: 500; } .method dd { margin: 0 0 12px; color: color-mix(in srgb, var(--footer-ink) 75%, transparent); }
-.method .colophon { grid-column: toc-start / content-end; margin-top: 48px; font-size: 13px; color: color-mix(in srgb, var(--footer-ink) 62%, transparent); }
-.method .bigmark { grid-column: toc-start / content-end; font: var(--hw) clamp(calc(var(--fs-hero) * .4px), calc(var(--fs-hero) * .0695vw), calc(var(--fs-hero) * 1px))/var(--lh-hero) var(--heading); letter-spacing: calc(-.06em * var(--track)); margin: 64px 0 0; color: var(--footer-ink); }
+.method .colophon { grid-column: content; margin-top: 48px; font-size: 13px; color: color-mix(in srgb, var(--footer-ink) 62%, transparent); }
+.method .bigmark { grid-column: content; font: var(--hw) clamp(calc(var(--fs-hero) * .4px), calc(var(--fs-hero) * .0695vw), calc(var(--fs-hero) * 1px))/var(--lh-hero) var(--heading); letter-spacing: calc(-.06em * var(--track)); margin: 64px 0 0; color: var(--footer-ink); }
 
 /* Responsive ------------------------------------------------------------ */
 @media (max-width: 1099px) {
   :root { --pad: 20px; }
-  .g { grid-template-columns: [full-start] var(--pad) [toc-start wide-start main-start] minmax(0, 1fr) [main-end content-end] var(--pad) [full-end]; }
+  .g { grid-template-columns: [full-start] var(--pad) [content-start] minmax(0, 1fr) [content-end] var(--pad) [full-end]; }
   .band .dek, .band #kpis, .band #insights, .section .sec-kicker, .section-head { grid-row: auto; }
   .band .dek { margin: 0 0 32px; }
   .section .sec-kicker { padding: 0 0 16px; }
   .section-head { margin-bottom: 36px; }
-  .grid.wide { grid-column: main-start / content-end; }
   .hdr { grid-template-columns: auto 1fr auto; }
   .art { grid-template-columns: 1fr; } .art .art-r { display: none; }
 }
 @media (max-width: 700px) {
-  body { font-size: 15px; }
+  body { font-size: 15px; --gutter: 16px; }   /* narrower gutter on phones (KPI pairs) */
   .hdr .seg-o .navbtn .long { display: none; } .hdr .seg-o .navbtn .short { display: inline; }
   .hdr .brand { min-width: 0; font-size: 16px; }
   .hdr .brand .badge { display: none; }
@@ -603,7 +613,6 @@ html.hero-plain .band .rule { border-top: 4px solid var(--primary); }
 
 /* layout.style = "clean" (default theme "Neutro"): plain hero on the page color, KPI cards, light footer.
    Everything here only re-styles the shared markup; "blocks" keeps the full-bleed color hero + band. */
-@media (min-width: 1100px) { html.layout-clean { --pad: 32px; } }
 html.layout-clean { --hero: var(--bg); --hero-ink: var(--ink); --hero-muted: var(--muted); --hero-rule: var(--rule); }
 html.layout-clean .hero { padding-top: calc(var(--hdr-h) + clamp(28px, 4vw, 64px)); }
 html.layout-clean .hero .g { min-height: 0 !important; padding-bottom: clamp(24px, 3vw, 40px); align-content: start; }
@@ -616,11 +625,11 @@ html.layout-clean .hero h1.title { transition-delay: calc(.06s * var(--mk)); } h
 html.layout-clean.intro .hero .kicker, html.layout-clean.intro .hero h1.title, html.layout-clean.intro .hero .byline { opacity: 0; transform: translateY(10px); }
 html.layout-clean .band { padding: clamp(28px, 3vw, 44px) 0 calc(var(--sp-band) * 1px); }
 html.layout-clean .band .rule { display: none; }
-html.layout-clean .band .dek { grid-column: toc-start / main-end; grid-row: 1; font: 400 calc(var(--fs-dek) * 1px)/1.5 var(--sans); letter-spacing: -.005em; color: var(--ink-2); max-width: 46em; margin: 0 0 28px; }
+html.layout-clean .band .dek { grid-column: content; grid-row: 1; font: 400 calc(var(--fs-dek) * 1px)/1.5 var(--sans); letter-spacing: -.005em; color: var(--ink-2); max-width: 46em; margin: 0 0 28px; }
 html.layout-clean .band .dek b { font-weight: 600; }
-html.layout-clean .band #kpis { grid-column: toc-start / content-end; grid-row: 2; }
-html.layout-clean .band #insights { grid-column: toc-start / content-end; grid-row: 3; padding-top: 40px; }
-html.layout-clean .kpi-grid { gap: 12px; border: 0; border-radius: 0; }
+html.layout-clean .band #kpis { grid-column: content; grid-row: 2; }
+html.layout-clean .band #insights { grid-column: content; grid-row: 3; padding-top: 40px; }
+html.layout-clean .kpi-grid { gap: 16px var(--gutter); border: 0; border-radius: 0; }
 html.layout-clean .kpi, html.layout-clean .kpi.t { background: var(--surface); border: var(--rule-w) solid var(--rule); border-radius: var(--radius); padding: 16px 18px 14px; box-shadow: 0 1px 2px rgba(15, 20, 25, .04); transition: border-color calc(.2s * var(--mk)) var(--ease-io), opacity calc(.5s * var(--mk)) var(--ease-out), transform calc(.5s * var(--mk)) var(--ease-out); }
 html.layout-clean .kpi:hover { border-color: var(--rule-strong); }
 html.layout-clean.intro .kpi { opacity: 0; transform: translateY(8px); }
@@ -636,7 +645,6 @@ html.layout-clean .kpi .kci { order: 3; }
 html.layout-clean .kpi svg.spark { order: 4; margin-top: 12px; }
 html.layout-clean .kpi svg.spark path { stroke: var(--accent); stroke-width: 1.5; }
 html.layout-clean .insights .kicker { color: var(--muted); }
-html.layout-clean .insights ol { columns: 3 300px; column-gap: 32px; }
 html.layout-clean .insights li { padding-left: 14px; border-left: 2px solid var(--rule-strong); }
 html.layout-clean .insights .n { color: var(--primary-text); }
 html.layout-clean .section .sec-rule { border-top-color: var(--rule); }
@@ -644,7 +652,7 @@ html.layout-clean .section .sec-kicker { color: var(--primary-text); font-weight
 html.layout-clean .method { background: var(--footer-bg); color: var(--footer-ink); border-top: var(--rule-w) solid var(--rule); padding-bottom: 56px; }
 html.layout-clean .method .bigmark { display: none; }
 @media (max-width: 700px) {
-  html.layout-clean .kpi-grid { gap: 8px; }
+  html.layout-clean .kpi-grid { row-gap: 8px; }
   html.layout-clean .kpi, html.layout-clean .kpi.t { padding: 12px 12px 10px; }
   html.layout-clean .kpi .label { font-size: 13px; margin-bottom: 6px; }
   html.layout-clean .insights li { padding-left: 12px; }
@@ -655,11 +663,11 @@ html.no-motion *, html.no-motion *::before, html.no-motion *::after { transition
 /* Print / Save as PDF --------------------------------------------------- */
 .print-only { display: none; }
 html.print-prep .page, html.print-prep .filterbar .inner { max-width: 760px; }
-html.print-prep .g { grid-template-columns: [full-start] 20px [toc-start wide-start main-start] minmax(0, 1fr) [main-end content-end] 20px [full-end]; }
+html.print-prep .g { grid-template-columns: [full-start] 20px [content-start] minmax(0, 1fr) [content-end] 20px [full-end]; }
 html.print-prep .band .dek, html.print-prep .band #kpis, html.print-prep .band #insights, html.print-prep .section .sec-kicker, html.print-prep .section-head { grid-row: auto; }
 html.print-prep .grid { column-gap: 0; }
 html.print-prep .kpi .value { margin-bottom: 14px; } html.print-prep .kpi .label { font-size: 18px; } html.print-prep .band .dek { font-size: 22px; }
-html.print-prep .chart.half, html.print-prep .chart.third, html.print-prep .chart.twothirds { grid-column: span 12; }
+html.print-prep .chart.half, html.print-prep .chart.third { grid-column: span 12 !important; }
 @media print {
   @page { size: A4; margin: 12mm 10mm; }
   :root, [data-theme="dark"] { --bg: #fff; --surface: #fff; --surface-2: #f4f3ef; --ink: #000; --ink-2: #111; --muted: #555; --rule: #ddd; --rule-strong: #000; --context: #e2ded8; --footer-bg: #fff; --footer-ink: #000; }
@@ -668,7 +676,7 @@ html.print-prep .chart.half, html.print-prep .chart.third, html.print-prep .char
   .hdr, .menu, .scrim, .toc, .art, .filterbar, .table-tools, .pager, .help-pop, .method summary .acc-state, .method summary .chev { display: none !important; }
   .hero { padding-top: 0; } .hero .g { min-height: 0 !important; padding-top: 36px; }
   .rv { opacity: 1 !important; transform: none !important; }
-  .print-only { display: block; font-size: 9.5pt; color: #333; border: 1px solid #000; padding: 6px 10px; margin: 14px 0 0; grid-column: toc-start / content-end; }
+  .print-only { display: block; font-size: 9.5pt; color: #333; border: 1px solid #000; padding: 6px 10px; margin: 14px 0 0; grid-column: content; }
   .section { padding-top: 26px; }
   .chart, .kpi, .insights li, .section-head, .bar, .multiple { break-inside: avoid; }
   .tscroll { overflow: visible; }
@@ -1856,12 +1864,12 @@ function scaffold() {
     sec.className = "section g"; sec.id = s.id || "s" + si;
     const nn = String(si + 1).padStart(2, "0");
     sec._label = s.toc || String(s.title || "").replace(/\*\*|_/g, "");
-    const wide = (s.charts || []).some(c => (c.span && c.span !== "full") || c.wide || c.type === "columns");
-    sec.innerHTML = `<div class="sec-rule"></div><p class="kicker sec-kicker rv">${esc(s.kicker || `${T.section} ${nn}`)}</p><div class="section-head rv"><h2>${numbered ? `${si + 1}. ` : ""}${md(s.title)}</h2>${s.question ? `<p class="q">${md(s.question)}</p>` : ""}${s.lede ? `<p class="lede">${md(s.lede)}</p>` : ""}</div><div class="grid${wide ? " wide" : ""}"></div>`;
+    sec.innerHTML = `<div class="sec-rule"></div><p class="kicker sec-kicker rv">${esc(s.kicker || `${T.section} ${nn}`)}</p><div class="section-head rv"><h2>${numbered ? `${si + 1}. ` : ""}${md(s.title)}</h2>${s.question ? `<p class="q">${md(s.question)}</p>` : ""}${s.lede ? `<p class="lede">${md(s.lede)}</p>` : ""}</div><div class="grid"></div>`;
     const grid = sec.querySelector(".grid");
     (s.charts || []).forEach((c, ci) => {
       const fig = document.createElement("figure");
-      fig.className = "chart " + (c.span || "full");
+      const w = widthOf(c);
+      fig.className = "chart " + w; fig.dataset.width = w;
       fig.dataset.chart = c.id || `${sec.id}-${ci}`;
       fig.dataset.type = c.type;
       fig.setAttribute("aria-label", c.title || c.type);
@@ -1907,6 +1915,7 @@ function scaffold() {
     <p class="bigmark" aria-hidden="true">${esc(META.brand || THEME.brand || META.title || "")}</p>`;
   $("#method")._label = T.methodShort;
   initAccordion($("#method-acc"));
+  layoutBlocks();
   buildNav();
   buildFilterBar();
 }
@@ -2121,10 +2130,9 @@ function kpiCI(k, m, rows, prevRows, grain) {
 function layoutKPIs() {
   const grid = $("#kpis .kpi-grid"); if (!grid) return;
   const items = [...grid.children], n = items.length;
-  const print = document.documentElement.classList.contains("print-prep"), narrow = innerWidth <= 700 && !print;
-  const clean = document.documentElement.classList.contains("layout-clean");
-  const cols = narrow ? Math.min(2, n) : clean && !print ? (innerWidth >= 1100 ? Math.min(n, 6) : Math.min(3, n)) : n === 4 && !print ? 2 : Math.min(3, n);
-  grid.style.setProperty("--kcols", cols);
+  const print = document.documentElement.classList.contains("print-prep");
+  // spans 4 (3 per row), 3 (4 per row, desktop with 4 or 8 KPIs) or 6 (2 per row); a lone last card widens
+  const b = bp(), cols = spanRun(items, b === "phone" ? 2 : 3 + (b === "desktop"), true);
   items.forEach((k, i) => k.classList.toggle("t", i >= cols));
   const cap = print ? Math.min(54, C.fsKpi) : C.fsKpi;
   grid.style.setProperty("--kv", cap + "px");
@@ -2290,8 +2298,83 @@ function chartHasData(c) {
   if (c.dim && !rows.some(r => r[c.dim] != null)) return false;
   return true;
 }
+/* ---- layout grid: every block spans 12, 6 or 4 of the 12 content columns (100 / 50 / 33 %).
+   Charts carry width full | half | third (build.py validates it); a row holds one width only, and a row that
+   comes out incomplete widens its blocks (1 left → full, 2 thirds → 2 halves), so edges always line up.
+   Tablet (701–1239 px): third → half. Phone (≤ 700 px) and print: everything full. */
+const SPAN = { full: 12, half: 6, third: 4 };
+function widthOf(c) {
+  const w = c.width || ({ half: "half", third: "third" })[c.span] || "full";
+  return SPAN[w] ? w : "full";
+}
+function bp() {
+  if (document.documentElement.classList.contains("print-prep")) return "print";
+  return innerWidth <= 700 ? "phone" : innerWidth < 1240 ? "tablet" : "desktop";
+}
+function packSpans(spans) {
+  const out = [];
+  for (let i = 0; i < spans.length;) {
+    const s = spans[i], per = 12 / s; let j = i;
+    while (j < spans.length && j - i < per && spans[j] === s) j++;
+    const k = j - i;
+    for (let q = i; q < j; q++) out.push(k === per ? s : 12 / k);
+    i = j;
+  }
+  return out;
+}
+// cards per row for a run of n equal blocks: 3 (or 2) per row, whichever leaves no lone card; `four` allows 4 per row
+function perRow(n, max, four) {
+  if (max <= 1) return 1;
+  if (four && max >= 4 && n % 4 === 0) return 4;
+  if (max >= 3 && (n % 3 === 0 || n % 2 !== 0)) return Math.min(3, n);
+  return Math.min(2, n);
+}
+function spanRun(els, max, four) {
+  const n = els.length, per = perRow(n, max, four), spans = packSpans(Array(n).fill(12 / Math.max(1, per)));
+  els.forEach((el, i) => { el.style.gridColumn = `span ${spans[i]}`; el.dataset.span = spans[i]; });
+  return per;
+}
+function layoutCharts() {
+  const b = bp();
+  let sig = "";
+  document.querySelectorAll("#sections .grid").forEach(grid => {
+    const figs = [...grid.children].filter(f => f.matches("figure.chart") && !f.classList.contains("is-empty"));
+    const want = figs.map(f => { const w = SPAN[f.dataset.width] || 12; return b === "phone" || b === "print" ? 12 : b === "tablet" && w === 4 ? 6 : w; });
+    const got = packSpans(want);
+    figs.forEach((f, i) => { f.style.gridColumn = `span ${got[i]}`; f.dataset.span = got[i]; sig += got[i] + ","; });
+    grid.querySelectorAll(":scope > figure.chart.is-empty").forEach(f => { f.style.gridColumn = "span 12"; f.dataset.span = 12; sig += "e,"; });
+  });
+  return sig;
+}
+// side-by-side charts: same caption height, so the plots start on one line
+function equalizeCaptions() {
+  document.querySelectorAll("#sections .grid").forEach(grid => {
+    const caps = [...grid.querySelectorAll(":scope > figure.chart > figcaption")];
+    caps.forEach(c => { c.style.minHeight = ""; });
+    const rows = new Map();
+    caps.forEach(c => { if (c.parentElement.dataset.span === "12") return; const k = Math.round(c.parentElement.offsetTop); (rows.get(k) || rows.set(k, []).get(k)).push(c); });
+    rows.forEach(list => { if (list.length < 2) return; const h = Math.max(...list.map(c => c.getBoundingClientRect().height)); list.forEach(c => { c.style.minHeight = h + "px"; }); });
+  });
+}
+function layoutBlocks() {
+  const b = bp(), max = b === "phone" ? 1 : b === "desktop" ? 3 : 2;
+  const ins = [...document.querySelectorAll("#insights ol > li")];
+  if (ins.length) spanRun(ins, max, false);
+  const cols = [...document.querySelectorAll("#method .cols > *")];
+  if (cols.length) spanRun(cols, max, false);
+}
+function layoutGrid() { layoutKPIs(); layoutBlocks(); const sig = layoutCharts(); equalizeCaptions(); return sig; }
+
 function renderCharts() {
-  document.querySelectorAll("figure.chart").forEach(fig => {
+  document.querySelectorAll("figure.chart").forEach(fig => fig.classList.toggle("is-empty", !chartHasData(fig._spec)));
+  const sig = layoutCharts();
+  document.querySelectorAll("figure.chart").forEach(renderFig);
+  // a chart that turned out empty only after drawing frees its slot: re-pack and redraw at the new widths
+  if (layoutCharts() !== sig) document.querySelectorAll("figure.chart").forEach(renderFig);
+  equalizeCaptions();
+}
+function renderFig(fig) {
+  {
     const el = fig.querySelector(".viz"), spec = fig._spec, fn = CHARTS[spec.type];
     el.innerHTML = "";
     try {
@@ -2307,11 +2390,11 @@ function renderCharts() {
       el.innerHTML = `<div class="empty">⚠ ${esc(err.message)}</div>`;
       console.error("[report] chart failed", spec, err);
     }
-  });
+  }
 }
 function update() {
   hideTip();
-  syncFilterBar(); renderKPIs(); renderCharts(); renderTable();
+  syncFilterBar(); renderKPIs(); layoutBlocks(); renderCharts(); renderTable();
   window.__report.state = { range: S.range && S.range.map(iso), preset: S.preset,
     cats: Object.fromEntries(Object.entries(S.cats).filter(([, s]) => s.size).map(([k, s]) => [k, [...s]])), rows: filterRows().length };
 }
@@ -2418,7 +2501,7 @@ function endPrint() {
   const acc = $("#method-acc"); if (acc && acc._wasOpen === false) acc.open = false;
   update(); printing = false;
 }
-window.__report.preparePrint = preparePrint; window.__report.endPrint = endPrint;
+window.__report.preparePrint = preparePrint; window.__report.endPrint = endPrint; window.__report.layoutGrid = layoutGrid;
 
 function boot() {
   scaffold(); initTable();
@@ -2428,7 +2511,8 @@ function boot() {
   // intro: blocks layout — the hero opens full-height, then settles and the art strip wipes in; clean layout — title and KPI cards fade up
   if (document.documentElement.classList.contains("intro")) setTimeout(() => document.documentElement.classList.remove("intro"), 350 * MK);
   let w = innerWidth, t;
-  addEventListener("resize", () => { if (Math.abs(innerWidth - w) < 16) return; w = innerWidth; clearTimeout(t); t = setTimeout(() => { renderCharts(); layoutKPIs(); drawArt(); }, 150); });
+  addEventListener("resize", () => { if (Math.abs(innerWidth - w) < 16) return; w = innerWidth; clearTimeout(t); t = setTimeout(() => { layoutKPIs(); layoutBlocks(); renderCharts(); drawArt(); }, 150); });
+  document.fonts?.ready?.then(() => equalizeCaptions());
   matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", e => { try { if (localStorage.getItem("report-theme")) return; } catch (x) {} applyTheme(e.matches ? "dark" : "light", false); });
   addEventListener("beforeprint", preparePrint);
   addEventListener("afterprint", endPrint);

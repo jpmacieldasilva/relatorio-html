@@ -50,6 +50,10 @@ CHART_TYPES = {"line", "bars", "columns", "share", "multiples", "heatmap", "scat
 AGGS = {"sum", "mean", "count", "distinct", "min", "max", "ratio", "nps"}
 CI_KINDS = {"wilson", "nps", "mean"}
 TIMEPARTS = {"$month", "$weekday", "$year"}
+# layout grid: every chart spans 100 / 50 / 33 % of the 12-column content area (12 / 6 / 4 columns)
+WIDTHS = {"full": 12, "half": 6, "third": 4}
+DENSE = {"heatmap", "multiples"}            # many cells/panels: never narrower than half (third → half)
+LONG = {"line", "trendci", "scatter"}       # long time axis or point cloud: warn at third
 
 
 # --------------------------------------------------------------------------- #
@@ -182,6 +186,12 @@ def validate(spec: dict) -> list[str]:
             t = c.get("type")
             if t not in CHART_TYPES:
                 problems.append(f"chart type '{t}' unknown (valid: {sorted(CHART_TYPES)})")
+            w = c.get("width")
+            if w is not None and w not in WIDTHS:
+                problems.append(f"chart '{c.get('title', t)}': width '{w}' unknown (valid: full | half | third — 100 / 50 / 33 % of the content grid)")
+            sp = c.get("span")
+            if w is None and sp is not None and sp not in WIDTHS:
+                problems.append(f"chart '{c.get('title', t)}': span '{sp}' is not supported — use width: full | half | third")
             for key in ("measure", "x", "y", "r"):
                 v = c.get(key)
                 if v and key in ("x", "y") and t == "heatmap":
@@ -332,6 +342,50 @@ def prune_empty(spec: dict, cols: dict) -> list[str]:
     return warns
 
 
+def pack_widths(widths: list[str]) -> list[tuple[int, int, str, str]]:
+    """Split a section's chart widths into rows → [(start, end, asked, final)]. A row holds one width only
+    (3 thirds, 2 halves or 1 full); an incomplete row widens: 1 half/third → full, 2 thirds → 2 halves."""
+    rows, i = [], 0
+    while i < len(widths):
+        w = widths[i]; per = 12 // WIDTHS[w]; j = i
+        while j < len(widths) and j - i < per and widths[j] == w:
+            j += 1
+        k = j - i
+        final = w if k == per else {1: "full", 2: "half"}[k]
+        rows.append((i, j, w, final))
+        i = j
+    return rows
+
+
+def layout_rows(spec: dict) -> list[str]:
+    """Resolve every chart's width (legacy span → width, default full), pack rows, widen orphans; return warnings."""
+    warns = []
+    for s in spec.get("sections", []):
+        charts = [dict(c) for c in s.get("charts", [])]
+        for c in charts:
+            name = c.get("title") or c.get("type")
+            if "width" not in c and c.get("span") in WIDTHS:
+                c["width"] = c["span"]
+                warns.append(f"chart '{name}': 'span' is deprecated — read as width '{c['span']}'")
+            c.pop("span", None)
+            if c.pop("wide", None) is not None:
+                warns.append(f"chart '{name}': 'wide' is ignored — every chart sits in the same content grid")
+            c.setdefault("width", "full")
+            if c["type"] in DENSE and c["width"] == "third":
+                warns.append(f"chart '{name}' ({c['type']}) at width 'third' → half: a dense chart needs at least 50 %")
+                c["width"] = "half"
+            if c["type"] in LONG and c["width"] == "third":
+                warns.append(f"chart '{name}' ({c['type']}) at width 'third': check that the axis still reads — half or full is safer")
+        for a, b, asked, final in pack_widths([c["width"] for c in charts]):
+            if final != asked:
+                names = ", ".join(f"'{charts[q].get('title') or charts[q].get('type')}'" for q in range(a, b))
+                warns.append(f"section '{s.get('toc') or s.get('title') or s.get('id')}': incomplete row of {b - a} × {asked} ({names}) → {final}")
+                for q in range(a, b):
+                    charts[q]["width"] = final
+        s["charts"] = charts
+    return warns
+
+
 # --------------------------------------------------------------------------- #
 # Assets                                                                      #
 # --------------------------------------------------------------------------- #
@@ -412,6 +466,9 @@ def build(spec: dict, out: str | Path, *, cdn: bool = False, fonts: bool = True,
         spec["meta"] = dict(spec.get("meta", {}), grain=grain)
         print(f"time grain: {grain} ({why})", file=sys.stderr)
     for w in prune_empty(spec, cols):
+        print("spec: warning:", w, file=sys.stderr)
+    spec["sections"] = [dict(s) for s in spec.get("sections", [])]
+    for w in layout_rows(spec):
         print("spec: warning:", w, file=sys.stderr)
     spec.pop("theme", None)            # resolved below; the browser only needs the cfg
     spec["_theme"] = th.cfg

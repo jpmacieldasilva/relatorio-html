@@ -91,6 +91,22 @@ spec["contexto"] = {
 }
 ```
 
+## Grid de layout
+
+Todo o relatório segue um grid só. À esquerda fica um trilho reservado para o menu de capítulos, que nunca empurra nem cobre o conteúdo. A coluna de conteúdo tem largura máxima fixa (1128 px numa tela de 1440) e é dividida em 12 colunas com gutter fixo (32 px). Título, texto, cartões de KPI, destaques, gráficos, notas, tabela e metodologia começam na mesma borda, e cada bloco ocupa **100 %, 50 % ou 33 %** (12, 6 ou 4 colunas).
+
+```python
+{"type": "bars", "dim": "canal", "measure": "receita", "width": "half"}   # full (padrão) | half | third
+```
+
+- Cada linha tem uma largura só: 1 full, 2 halves ou 3 thirds. Se sobrar um gráfico sozinho, o `build.py` avisa e o alarga (um half sozinho vira full; 2 thirds viram 2 halves). Qualquer outro valor em `width` faz o build falhar.
+- Gráficos densos (heatmap, small multiples, tabela, séries longas) ficam em full. `half` serve para comparar dois gráficos; `third`, para três visões curtas e paralelas.
+- Gráficos lado a lado têm títulos com a mesma altura, então os eixos começam na mesma linha.
+- No tablet, third vira half e o menu vai para a gaveta do cabeçalho. No celular, tudo fica em full (os KPIs ficam em pares).
+- As medidas vêm do tema (`layout.grid`: `maxWidth`, `rail`, `railGap`, `gutter`, `pad`). O `verify.py` confere o alinhamento em 1440, 1280, 1024 e 390 px.
+
+![Grid de 12 colunas e trilho do menu sobre a seção Volume do exemplo de pesquisa](docs/grid-12-colunas.png)
+
 ## Começando
 
 ```bash
@@ -211,5 +227,6 @@ Reading rules built in:
 - charts, sections and KPIs without data are omitted at build time (with a warning), and a chart emptied by a filter collapses to one quiet line;
 - interaction help lives in one "Como filtrar" (?) popover instead of on every chart;
 - the methodology is the last block, collapsed by default and expanded in print.
+- one layout grid: a reserved rail for the chapter menu, a fixed-width content column split into 12 columns with a fixed gutter, and every block (text, KPI cards, highlights, charts, table) at 100 / 50 / 33 %; charts take `"width": "full" | "half" | "third"`, the build widens incomplete rows, and `verify.py` checks the edges at 1440, 1280, 1024 and 390 px.
 
 Quick start: `pip install -r requirements.txt && python -m playwright install chromium`, then `python exemplos/vendas/preparar.py` and `python verify.py exemplos/vendas/relatorio.html`. The folder is also a drop-in **AI agent skill** (`SKILL.md`, paths relative to the skill folder). Docs are mostly in Portuguese (pt-BR). Code comments and `SKILL.md` are in English. MIT licensed; bundled third-party licenses are listed in `NOTICE.md`.
