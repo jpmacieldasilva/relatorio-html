@@ -53,17 +53,14 @@ print(cx.briefing(mapping), "\n")
 SEGMENTS = {"Canal de atendimento ": "canal", "Região": "regiao", "UF": "uf", "Plano contratado": "plano",
             "Motivo do contato": "motivo", "Resolvido no 1º contato?": "resolvido", "Cliente há quanto tempo?": "tempo_cliente"}
 prep = cx.prepare(raw, mapping, segments=SEGMENTS, min_n=30)
-for d in prep.dims:
+for d in prep.dims:   # short labels for plain field names only
     if d["key"] == "canal":
         d["label"] = "Canal"
     if d["key"] == "plano":
         d["label"] = "Plano"
     if d["key"] == "motivo":
         d["label"] = "Motivo"
-    if d["key"] == "tempo_cliente":
-        d["label"] = "Tempo de casa"
-    if d["key"] == "resolvido":
-        d["label"] = "Resolvido no 1º contato"
+    # columns whose header is a question ("Resolvido no 1º contato?", "Cliente há quanto tempo?") keep it verbatim
 
 # ---------------------------------------------------------------- 4. comment themes (before invitations: same row index)
 NAMES = [  # human names for the auto themes, picked by their top terms (auto label kept when nothing matches)
@@ -132,7 +129,7 @@ insights = [
 if len(worst):
     w0 = worst.iloc[0]
     lbl = {d["key"]: d["label"] for d in prep.dims}
-    insights.append({"title": f"**{lbl[w0['dim']]}: {w0['grupo']}** é quem mais puxa o CSAT para baixo",
+    insights.append({"title": f"**{lbl[w0['dim']]}: {w0['grupo']}** é o grupo que mais reduz o CSAT geral",
                      "text": f"impacto de {cx.fmt_diff(w0['impact'], M['csat'])} no geral (CSAT {v(cx.Stat(w0['v'], w0['n']), 'csat')} vs. {v(cx.Stat(w0['rest'], 0), 'csat')} no restante; diferença significativa após correção de Holm, {cx.fmt_p(w0['padj'])})."})
 if norte_t:
     word = (f"cai {cx.fmt_diff(-norte_t['d'], M['csat']).lstrip('+')} — queda significativa ({cx.fmt_p(norte_t['p'])})" if norte_t["sig"] and norte_t["d"] < 0
@@ -152,11 +149,11 @@ t_all = cx.diff_test(csat_c, csat_p) or {}
 trend = "sobe" if t_all.get("sig") and t_all["d"] > 0 else "cai" if t_all.get("sig") else "fica estável"
 chat = canal[canal["grupo"] == "Chat"]
 chat_low = bool(len(chat) and chat["sig"].iloc[0] and chat["v"].iloc[0] < chat["rest"].iloc[0])
-title = f"Pulsar Fibra: a satisfação {trend}" + (", mas o chat ainda fica para trás" if chat_low else "")
+title = f"Pulsar Fibra: a satisfação {trend}" + (", mas o chat continua abaixo dos outros canais" if chat_low else "")
 spec = {
     # Passo 0 (SKILL.md): answers approved in the proposal; shown in the footer because exibir is true
     "contexto": {
-        "objetivo": "Saber se a satisfação melhorou e quais canais e motivos puxam a nota para baixo",
+        "objetivo": "Saber se a satisfação melhorou e quais canais e motivos reduzem a nota",
         "publico": "Time de atendimento e liderança de CX",
         "pontos_chave": ["Chat ainda abaixo dos outros canais?", "O que os detratores mais citam"],
         "linguagem": {"idioma": "pt-BR", "tom": "direto", "nivel": "técnico moderado"},
@@ -179,10 +176,10 @@ spec = {
     "insightsScope": "os últimos 12 meses (até 31 out 2026) vs. os 12 meses anteriores",
     "sections": [
         {"id": "satisfacao", "kicker": "Satisfação", "toc": "Satisfação", "title": "Como evolui a satisfação",
-         "question": "A nota melhora de verdade ou é ruído? A faixa mostra o intervalo de confiança de cada mês.",
+         "question": "A nota mudou além da margem de erro? A faixa mostra o intervalo de confiança de 95% de cada mês.",
          "charts": [
-             {"type": "trendci", "measure": "csat", "grain": "month", "span": "half", "title": "CSAT mensal", "subtitle": "% de notas 4–5 · faixa = IC 95% · ponto vazado = amostra pequena"},
-             {"type": "trendci", "measure": "nps", "grain": "month", "span": "half", "title": "NPS mensal", "subtitle": "pontos (−100 a +100) · faixa = IC 95%"},
+             {"type": "trendci", "measure": "csat", "span": "half", "title": "CSAT mensal", "subtitle": "% de notas 4–5 · faixa = IC 95% · ponto vazado = amostra pequena"},
+             {"type": "trendci", "measure": "nps", "span": "half", "title": "NPS mensal", "subtitle": "pontos (−100 a +100) · faixa = IC 95%"},
              {"type": "likert", "field": "csat_nota", "scale": [1, 5], "dim": "canal", "title": "Distribuição das notas de CSAT por canal",
               "subtitle": "Notas 1–2 à esquerda do eixo, 4–5 à direita, 3 dividida ao meio. % nas pontas = insatisfeitos e satisfeitos.",
               "labels": {"1": "1 · Muito insatisfeito", "2": "2", "3": "3 · Neutro", "4": "4", "5": "5 · Muito satisfeito"}},
@@ -191,18 +188,18 @@ spec = {
          "question": "Composição do NPS: detratores, neutros e promotores, por canal e por motivo do contato.",
          "charts": [
              {"type": "nps", "measure": "nps", "dim": "canal", "title": "NPS por canal", "subtitle": "▲/▼ = diferente do restante da base (teste z, correção de Holm); ≈ = sem diferença significativa"},
-             {"type": "nps", "measure": "nps", "dim": "motivo", "title": "NPS por motivo do contato", "subtitle": "Ordenado pelo NPS; clique para filtrar o relatório"},
+             {"type": "nps", "measure": "nps", "dim": "motivo", "title": "NPS por motivo do contato", "subtitle": "Ordenado pelo NPS"},
          ]},
-        {"id": "onde", "kicker": "Diagnóstico", "toc": "Onde quebra", "title": "Onde a experiência quebra",
-         "question": "Quais grupos ficam abaixo do restante, e quanto isso pesa na nota geral?",
-         "lede": "Cada ponto traz o IC de 95% e o tamanho da amostra. Grupos com menos de 30 respostas **aparecem**, vazados e tracejados: o intervalo largo diz que a leitura é só indicativa.",
+        {"id": "onde", "kicker": "Diagnóstico", "toc": "Diagnóstico", "title": "Grupos com CSAT abaixo do restante",
+         "question": "Quais grupos têm CSAT abaixo do restante, e quanto cada um reduz a nota geral?",
+         "lede": "Cada ponto traz o IC de 95% e o tamanho da amostra. Grupos com menos de 30 respostas **aparecem**, vazados e tracejados: com intervalo largo, a leitura é só indicativa.",
          "charts": [
              {"type": "drivers", "measure": "csat", "dims": ["canal", "motivo", "regiao", "plano", "resolvido"], "top": 12,
-              "title": "Quem puxa o CSAT para baixo", "subtitle": "Impacto = peso nas respostas × (CSAT do grupo − CSAT do restante), em p.p. do CSAT geral"},
+              "title": "Grupos que mais reduzem o CSAT geral", "subtitle": "Impacto = participação nas respostas × (CSAT do grupo − CSAT do restante), em p.p. do CSAT geral"},
              {"type": "ci", "measure": "csat", "dim": "motivo", "span": "half", "title": "CSAT por motivo do contato", "subtitle": "Ponto = CSAT · barra = IC 95% · faixa = geral"},
              {"type": "ci", "measure": "csat", "dim": "uf", "span": "half", "top": 27, "title": "CSAT por UF", "subtitle": "UFs pequenas ficam vazadas: amostra pequena"},
-             {"type": "likert", "field": "ces_nota", "scale": [1, 7], "dim": "resolvido", "title": "Esforço: “a Pulsar facilitou a resolução”",
-              "subtitle": "CES 1–7 (1 = discordo totalmente, 7 = concordo totalmente), por resolução no 1º contato",
+             {"type": "likert", "field": "ces_nota", "scale": [1, 7], "dim": "resolvido", "title": "Distribuição das notas de esforço (CES) por resolução no 1º contato",
+              "subtitle": "Escala 1–7. Notas 1–3 à esquerda do eixo, 5–7 à direita, 4 dividida ao meio.",
               "labels": {"1": "1 · Discordo totalmente", "4": "4 · Neutro", "7": "7 · Concordo totalmente"}},
          ]},
         {"id": "comentarios", "kicker": "Comentários", "toc": "Comentários", "title": "O que os clientes escrevem",
@@ -211,13 +208,13 @@ spec = {
          "charts": [
              {"type": "themes", "dim": "tema", "band": "faixa_nps", "bands": ["Detratores", "Neutros", "Promotores"], "measure": "nps",
               "exclude": ["Sem tema específico"], "verbatims": th.verbatims(), "terms": th.terms(), "quotes": 2,
-              "title": "Temas dos comentários", "subtitle": "Clique num tema para filtrar o relatório inteiro por ele"},
+              "title": "Temas dos comentários", "subtitle": "Temas agrupados automaticamente a partir do texto; barra = perfil NPS de quem comentou"},
          ]},
         {"id": "volume", "kicker": "Operação", "toc": "Volume", "title": "Volume e taxa de resposta",
          "question": "Quantas pessoas respondem, e quantas das convidadas?",
          "charts": [
-             {"type": "line", "measure": "respostas", "span": "half", "grain": "week", "title": "Respostas por semana", "subtitle": "respostas recebidas"},
-             {"type": "trendci", "measure": "taxa_resposta", "grain": "month", "span": "half", "title": "Taxa de resposta", "subtitle": "respostas ÷ pesquisas enviadas · IC 95%"},
+             {"type": "line", "measure": "respostas", "span": "half", "title": "Respostas por mês", "subtitle": "respostas recebidas"},
+             {"type": "trendci", "measure": "taxa_resposta", "span": "half", "title": "Taxa de resposta", "subtitle": "respostas ÷ pesquisas enviadas · IC 95%"},
              {"type": "bars", "dim": "canal", "measure": "respostas", "title": "Respostas por canal", "subtitle": "respostas no período · tique = período anterior"},
          ]},
     ],

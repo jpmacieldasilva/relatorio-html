@@ -101,31 +101,27 @@ m_c, m_p = C.lucro.sum() / rec_c, P.lucro.sum() / rec_p
 ch = pd.DataFrame({"c": C.groupby("canal").receita.sum() / rec_c, "p": P.groupby("canal").receita.sum() / rec_p})
 ch["d"] = ch.c - ch.p
 up_ch, dn_ch = ch.d.idxmax(), ch.d.idxmin()
-wk = C.set_index("data").receita.resample("W-SUN", label="left", closed="right").sum()  # weeks start Monday, like the HTML
-wk.index = wk.index + pd.Timedelta(days=1)
-pk = wk.idxmax()
-pk_ratio = wk.max() / wk.median()
-# name the peak week only if it really contains a known date
-def black_friday(y):
-    nov1 = pd.Timestamp(y, 11, 1)
-    return nov1 + pd.Timedelta(days=(3 - nov1.weekday()) % 7 + 21 + 1)   # 4th Thursday + 1
-bf = black_friday(pk.year)
-pk_name = ("da Black Friday" if pk <= bf <= pk + pd.Timedelta(days=6) else
-           "pré-Natal" if pk.month == 12 and pk.day <= 24 else f"de {pk:%d/%m}")
+# the report uses ONE time grain (build.py picks "month" for 24 months of daily data), so the peak is a month too
+mo = C.set_index("data").receita.resample("MS").sum()
+pk = mo.idxmax()
+pk_ratio = mo.max() / mo.median()
+MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
+pk_name = f"{MESES[pk.month - 1]} de {pk.year}"
+pk_note = " (mês da Black Friday)" if pk.month == 11 else " (mês do Natal)" if pk.month == 12 else ""
 
 insights = [
     {"title": f"Receita de **{brl(rec_c)}** nos últimos 12 meses, **{pct(rec_c / rec_p - 1)}** sobre o mesmo período anterior",
      "text": f"Foram **{num(C.pedidos.sum())}** pedidos entregues, com ticket médio de **{brl(rec_c / C.pedidos.sum(), False)}**."},
     {"title": f"**{best}** é a região que mais cresce ({pct(reg.g[best])}); **{worst}** "
-              + ("encolhe" if reg.g[worst] < 0 else "cresce menos") + f" ({pct(reg.g[worst])})",
+              + ("cai" if reg.g[worst] < 0 else "cresce menos") + f" ({pct(reg.g[worst])})",
      "text": (f"{worst} perdeu **{brl(reg.p[worst] - reg.c[worst])}** de receita em um ano." if reg.g[worst] < 0 else
               f"{worst} ganhou só **{brl(reg.c[worst] - reg.p[worst])}** em um ano; {best} ganhou **{brl(reg.c[best] - reg.p[best])}**.")},
     {"title": f"A margem de **{mcat}** caiu **{pp(cat.dm[mcat], False)}**",
      "text": f"O desconto médio da categoria foi de **{pct(cat.dp[mcat], False)}** para **{pct(cat.dc[mcat], False)}** do valor bruto. Margem total: **{pct(m_c, False)}** ({pp(m_c - m_p)})."},
     {"title": f"**{up_ch}** ganha participação ({pp(ch.d[up_ch])}); **{dn_ch}** perde ({pp(ch.d[dn_ch])})",
      "text": f"{up_ch} responde agora por **{pct(ch.c[up_ch], False)}** da receita."},
-    {"title": f"A semana {pk_name} vendeu **{dec(pk_ratio)}×** uma semana típica",
-     "text": f"Semana de {pk:%d/%m/%Y}: **{brl(wk.max())}**, contra mediana semanal de **{brl(wk.median())}**."},
+    {"title": f"O mês de maior receita foi **{pk_name}**{pk_note}: **{dec(pk_ratio)}×** a mediana mensal",
+     "text": f"Receita de **{brl(mo.max())}** no mês, contra mediana mensal de **{brl(mo.median())}** nos últimos 12 meses."},
 ]
 
 # headline copy derived from the numbers above (never hand-typed claims)
@@ -133,12 +129,13 @@ cat_rev = pd.DataFrame({"c": C.groupby("categoria").receita.sum(), "p": P.groupb
 cat_rev["g"] = cat_rev.c / cat_rev.p - 1
 top_cat = cat_rev.c.idxmax()
 fast_ch = (C.groupby("canal").receita.sum() / P.groupby("canal").receita.sum() - 1).drop("Não informado", errors="ignore").idxmax()
-verb = "cresce" if rec_c >= rec_p else "recua"
-title = f"Casa Aurora: receita {verb} {pct(abs(rec_c / rec_p - 1), False)}, margem {'recua' if m_c < m_p else 'avança'}"
-subtitle = (f"Nos últimos 12 meses a receita {verb} **{pct(rec_c / rec_p - 1)}**, puxada por {best} e pelo canal {fast_ch}. "
-            f"Em {mcat}, o desconto maior tirou **{pp(cat.dm[mcat], False)}** de margem. Use os filtros para investigar qualquer recorte.")
-sec_trend = f"A receita {verb} {pct(abs(rec_c / rec_p - 1), False)} em 12 meses, com pico na semana {pk_name}"
-sec_geo = f"{best} cresce {pct(reg.g[best], False)}; {worst} " + ("encolhe" if reg.g[worst] < 0 else "fica para trás") + f" ({pct(reg.g[worst])})"
+# literal wording only (no metaphors): "cresce", "cai", "sobe" — derived from the sign
+verb = "cresce" if rec_c >= rec_p else "cai"
+title = f"Casa Aurora: receita {verb} {pct(abs(rec_c / rec_p - 1), False)}, margem {'cai' if m_c < m_p else 'sobe'} {pp(m_c - m_p, False)}"
+subtitle = (f"Nos últimos 12 meses a receita {verb} **{pct(rec_c / rec_p - 1)}**. O maior crescimento foi em {best} e no canal {fast_ch}. "
+            f"Em {mcat}, o desconto maior reduziu a margem em **{pp(cat.dm[mcat], False)}**.")
+sec_trend = f"A receita {verb} {pct(abs(rec_c / rec_p - 1), False)} em 12 meses; o mês de maior receita foi {pk_name}"
+sec_geo = f"{best} cresce {pct(reg.g[best], False)}; {worst} " + ("cai" if reg.g[worst] < 0 else "cresce menos") + f" ({pct(reg.g[worst])})"
 sec_mix = f"{mcat} vende {pct(cat_rev.c[mcat] / rec_c, False)} da receita e perdeu {pp(cat.dm[mcat], False)} de margem"
 ch_title = f"{fast_ch} cresce mais rápido que os outros canais"
 
@@ -189,25 +186,25 @@ spec = {
     "sections": [
         {"id": "tendencia", "kicker": "Tendência", "toc": "Tendência", "title": sec_trend,
          "question": "O negócio está crescendo, e em que ritmo?",
-         "lede": f"Semana mais forte: **{brl(wk.max())}**, {dec(pk_ratio)}× a mediana semanal. A Black Friday aparece marcada; troque o período no topo para ver a série completa.",
+         "lede": f"Mês de maior receita: **{brl(mo.max())}**, {dec(pk_ratio)}× a mediana mensal. A Black Friday aparece marcada; troque o período no topo para ver a série completa.",
          "charts": [
              {"type": "line", "measure": "receita", "title": "Receita por período",
-              "subtitle": "Granularidade automática: dia, semana ou mês conforme o período selecionado.",
+              "subtitle": "Receita mensal.",
               "annotations": [{"date": "2024-11-29", "label": "Black Friday"}, {"date": "2025-11-28", "label": "Black Friday"}]},
-             {"type": "line", "measure": "receita", "series": "canal", "top": 4, "span": "half", "height": 260, "grain": "month",
+             {"type": "line", "measure": "receita", "series": "canal", "top": 4, "span": "half", "height": 260,
               "title": ch_title, "subtitle": "Receita mensal por canal."},
              {"type": "share", "dim": "canal", "measure": "receita", "span": "half",
-              "title": "Participação de cada canal na receita", "subtitle": "Parte do todo no período (no lugar de uma pizza)."},
+              "title": "Participação de cada canal na receita", "subtitle": "Participação de cada canal na receita total do período."},
          ]},
         {"id": "onde", "kicker": "Geografia", "toc": "Geografia", "title": sec_geo,
-         "question": "Quais regiões e estados puxam (ou seguram) o resultado?",
+         "question": "Quais regiões e estados crescem, e quais caem?",
          "charts": [
              {"type": "columns", "dim": "regiao", "measure": "receita",
               "title": "Receita por região", "subtitle": "Participação de cada região na receita do período."},
              {"type": "change", "dim": "uf", "measure": "receita", "top": 12,
               "title": "Variação da receita por UF", "subtitle": "As 12 maiores UFs, contra o mesmo período do ano anterior."},
              {"type": "scatter", "dim": "uf", "x": "receita", "y": "margem", "r": "pedidos", "labelTop": 14, "logX": True,
-              "title": "Tamanho versus rentabilidade por UF", "subtitle": "Cada círculo é uma UF; área proporcional aos pedidos. Clique para filtrar.",
+              "title": "Receita versus margem por UF", "subtitle": "Cada círculo é uma UF; área proporcional aos pedidos.",
               "note": "Margem calculada como soma do lucro ÷ soma da receita de cada UF."},
          ]},
         {"id": "mix", "kicker": "Mix e margem", "toc": "Mix e margem", "title": sec_mix,
@@ -216,12 +213,12 @@ spec = {
              {"type": "bars", "dim": "categoria", "measure": "receita", "span": "half", "title": "Receita por categoria"},
              {"type": "dumbbell", "dim": "categoria", "measure": "margem", "span": "half", "marginLeft": 104, "sort": "value",
               "title": "Margem bruta por categoria", "subtitle": "Variação em p.p. contra o ano anterior."},
-             {"type": "multiples", "dim": "categoria", "measure": "receita", "grain": "month",
+             {"type": "multiples", "dim": "categoria", "measure": "receita",
               "scale": "independent",
               "title": "Evolução mensal de cada categoria", "subtitle": "Escala própria em cada painel: compare formas, não tamanhos. As demais categorias em cinza, como contexto."},
          ]},
         {"id": "quando", "kicker": "Sazonalidade", "toc": "Sazonalidade", "title": "Quando cada categoria vende",
-         "question": "Qual é o calendário de cada categoria?",
+         "question": "Em quais meses cada categoria vende mais?",
          "charts": [
              {"type": "heatmap", "x": "$month", "y": "categoria", "measure": "receita", "marginLeft": 112,
               "title": "Receita por mês e categoria", "subtitle": "Receita em R$; quanto mais escuro, maior. Repare em Beleza em maio (Dia das Mães)."},

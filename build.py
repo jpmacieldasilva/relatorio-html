@@ -208,6 +208,131 @@ def validate(spec: dict) -> list[str]:
 
 
 # --------------------------------------------------------------------------- #
+# One time grain per report + charts without data                             #
+# --------------------------------------------------------------------------- #
+GRAINS = ["day", "week", "month", "quarter", "year"]
+TIME_CHARTS = {"line", "multiples", "trendci"}
+
+
+def _columns(spec: dict) -> dict:
+    """{key: list of python values} for either data format (columnar or list of row dicts). Dates → day numbers."""
+    data = spec.get("data")
+    if isinstance(data, dict):
+        out = {}
+        for c in data["columns"]:
+            if c["type"] == "cat":
+                d = c["dict"]
+                out[c["key"]] = [None if i is None or i < 0 else d[i] for i in c["values"]]
+            else:
+                out[c["key"]] = c["values"]
+        return out
+    rows = data or []
+    keys = {k for r in rows[:1000] for k in r}
+    out = {k: [r.get(k) for r in rows] for k in keys}
+    date = spec.get("fields", {}).get("date")
+    if date in out:
+        def day(v):
+            if v is None or v == "":
+                return None
+            if isinstance(v, (int, float)):
+                return int(v)
+            try:
+                return (dt.date.fromisoformat(str(v)[:10]) - dt.date(1970, 1, 1)).days
+            except ValueError:
+                return None
+        out[date] = [day(v) for v in out[date]]
+    return out
+
+
+def resolve_time_grain(spec: dict, cols: dict) -> tuple[str | None, str]:
+    """The single grain every time chart, KPI sparkline and the table's period grouping use.
+    spec["time_grain"] (or legacy meta.grain) wins; "auto"/missing → from the data span, never finer than the data."""
+    date = spec.get("fields", {}).get("date")
+    meta = spec.get("meta", {})
+    explicit = spec.get("time_grain") or meta.get("grain")
+    if explicit and explicit != "auto":
+        return explicit, "set in the spec"
+    days = sorted({v for v in cols.get(date, []) if v is not None}) if date else []
+    if not days:
+        return None, "no date column"
+    span = days[-1] - days[0]
+    g = "day" if span <= 92 else "week" if span <= 550 else "month" if span <= 6 * 366 else "quarter"
+    ds = [dt.date(1970, 1, 1) + dt.timedelta(days=d) for d in days]
+    native = ("quarter" if all(x.day == 1 and x.month in (1, 4, 7, 10) for x in ds) and len(ds) > 1 else
+              "month" if all(x.day == 1 for x in ds) else
+              "week" if len({x.weekday() for x in ds}) == 1 and len(ds) > 1 else "day")
+    floor = max(GRAINS.index(native), GRAINS.index(meta.get("minGrain") or "day"))
+    g = GRAINS[max(GRAINS.index(g), floor)]
+    return g, f"auto: {span + 1} days of data, finest grain in the data = {GRAINS[floor]}"
+
+
+def _has(vals) -> bool:
+    return any(v is not None and v != 0 for v in vals or [])
+
+
+def measure_has_data(m: dict, cols: dict, n: int) -> bool:
+    agg = m.get("agg", "sum")
+    if agg in ("ratio", "nps"):
+        return _has(cols.get(m.get("den")))
+    if agg == "count":
+        return _has(cols.get(m["field"])) if m.get("field") else n > 0
+    vals = cols.get(m.get("field", m["key"]), [])
+    return any(v is not None for v in vals) if agg in ("mean", "min", "max", "distinct") else _has(vals)
+
+
+def chart_empty_reason(c: dict, meas: dict, dims: set, cols: dict, n: int) -> str | None:
+    """why a chart would draw nothing for the whole data (None = it has data)"""
+    if not n:
+        return "the data has no rows"
+    for key in ("measure", "r") + (("x", "y") if c.get("type") == "scatter" else ()):
+        k = c.get(key)
+        if k in meas and not measure_has_data(meas[k], cols, n):
+            return f"measure '{k}' has no values"
+    for key in ("dim", "series", "x", "y"):
+        k = c.get(key)
+        if k in dims and not any(v is not None for v in cols.get(k, [])):
+            return f"dim '{k}' has no values"
+    if c.get("dims") and not any(any(v is not None for v in cols.get(d, [])) for d in c["dims"]):
+        return "none of its dims has values"
+    if c.get("type") == "likert" and not any(v is not None for v in cols.get(c.get("field"), [])):
+        return f"field '{c.get('field')}' has no answers"
+    return None
+
+
+def prune_empty(spec: dict, cols: dict) -> list[str]:
+    """Drop charts (and then sections and KPIs) that have no data at all; return warnings. n > 0 groups are never dropped."""
+    f = spec.get("fields", {})
+    meas = {m["key"]: m for m in f.get("measures", [])}
+    dims = {d["key"] for d in f.get("dims", [])}
+    n = max((len(v) for v in cols.values()), default=0)
+    warns, secs = [], []
+    for s in spec.get("sections", []):
+        charts = []
+        for c in s.get("charts", []):
+            why = chart_empty_reason(c, meas, dims, cols, n)
+            if why:
+                warns.append(f"chart '{c.get('title') or c.get('type')}' omitted: no data ({why})")
+            else:
+                charts.append(c)
+        if s.get("charts") and not charts:
+            warns.append(f"section '{s.get('toc') or s.get('title') or s.get('id')}' omitted: none of its charts has data (its menu/TOC entry goes too)")
+            continue
+        secs.append(dict(s, charts=charts))
+    if "sections" in spec:
+        spec["sections"] = secs
+    kpis = []
+    for k in spec.get("kpis", []):
+        m = meas.get(k.get("measure"))
+        if m and not measure_has_data(m, cols, n):
+            warns.append(f"KPI '{k.get('label') or m.get('label')}' omitted: no data")
+        else:
+            kpis.append(k)
+    if "kpis" in spec:
+        spec["kpis"] = kpis
+    return warns
+
+
+# --------------------------------------------------------------------------- #
 # Assets                                                                      #
 # --------------------------------------------------------------------------- #
 def _asset(name: str) -> str:
@@ -257,6 +382,21 @@ def build(spec: dict, out: str | Path, *, cdn: bool = False, fonts: bool = True,
     """theme= overrides spec["theme"] (preset name, path to JSON, or dict of overrides).
     base_dir resolves relative theme/logo/font paths (default: current directory)."""
     problems = validate(spec)
+    spec = dict(spec)
+    cols = _columns(spec) if spec.get("data") is not None else {}
+    grain, why = resolve_time_grain(spec, cols)
+    if grain and grain not in GRAINS:
+        problems.append(f"time_grain '{grain}' unknown (valid: {GRAINS} or 'auto')")
+    for s in spec.get("sections", []):
+        for c in s.get("charts", []):
+            g = c.get("grain")
+            if g and g not in GRAINS:
+                problems.append(f"chart '{c.get('title', c.get('type'))}': grain '{g}' unknown (valid: {GRAINS})")
+            elif g and g != grain and not c.get("grainOverride"):
+                problems.append(f"chart '{c.get('title', c.get('type'))}': grain '{g}' differs from the report's time_grain '{grain}' — "
+                                "every time chart uses one grain; drop 'grain', change spec['time_grain'], or set grainOverride: true on purpose")
+            elif g and c.get("grainOverride"):
+                print(f"spec: warning: chart '{c.get('title', c.get('type'))}' overrides the report grain ({grain} → {g})", file=sys.stderr)
     tm = load_tema_module()
     theme_spec = theme if theme is not None else spec.get("theme")
     th = tm.resolve(theme_spec, base_dir or Path.cwd(), legacy_meta=spec.get("meta", {}))
@@ -267,7 +407,12 @@ def build(spec: dict, out: str | Path, *, cdn: bool = False, fonts: bool = True,
         print("spec:", p, file=sys.stderr)
     if problems and strict:
         raise ValueError(f"{len(problems)} spec problem(s); fix them or call build(..., strict=False)")
-    spec = dict(spec)
+    if grain:
+        spec["time_grain"] = grain
+        spec["meta"] = dict(spec.get("meta", {}), grain=grain)
+        print(f"time grain: {grain} ({why})", file=sys.stderr)
+    for w in prune_empty(spec, cols):
+        print("spec: warning:", w, file=sys.stderr)
     spec.pop("theme", None)            # resolved below; the browser only needs the cfg
     spec["_theme"] = th.cfg
 
@@ -316,6 +461,7 @@ def main():
     ap.add_argument("--no-fonts", action="store_true", help="skip embedded fonts (system fallbacks are used)")
     ap.add_argument("--theme", help="preset name (temas/*.json), path to a theme JSON, or inline JSON overrides")
     ap.add_argument("--loose", action="store_true", help="write even if validation finds problems")
+    ap.add_argument("--time-grain", choices=["auto", "day", "week", "month", "quarter", "year"], help="one grain for every time chart (default: spec or auto)")
     a = ap.parse_args()
     spec = json.loads(Path(a.spec).read_text(encoding="utf-8"))
     if a.data:
@@ -327,6 +473,8 @@ def main():
     theme = None
     if a.theme:
         theme = json.loads(a.theme) if a.theme.strip().startswith("{") else a.theme
+    if a.time_grain:
+        spec["time_grain"] = a.time_grain
     build(spec, a.out, cdn=a.cdn, fonts=not a.no_fonts, strict=not a.loose, theme=theme,
           base_dir=Path(a.spec).resolve().parent)
 

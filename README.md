@@ -14,7 +14,7 @@ Você descreve o relatório em Python (um *spec*). O kit valida o spec, embute o
 ## O que faz
 
 - **Visualização editorial.** O título afirma o achado. Os destaques são calculados, os KPIs vêm com variação e minigráfico, e cada seção responde a uma pergunta. Seguem as regras de Tufte, Few e Cleveland: rótulos diretos, barras a partir do zero, nada de pizza com muitas fatias, nada de 3D, nada de dois eixos.
-- **Filtro cruzado em tudo.** Clicar numa barra, segmento, ponto, célula ou tema filtra o relatório inteiro (Shift soma à seleção). Há também presets de datas, intervalo livre, dropdowns com busca, chips de filtro ativo e uma tabela com busca, ordenação e exportação CSV.
+- **Filtro cruzado em tudo.** Clicar numa barra, segmento, ponto, célula ou tema filtra o relatório inteiro (Shift soma à seleção). As instruções de uso ficam num lugar só, o botão "Como filtrar" (?) na barra de filtros, sem repetir em cada gráfico. Há também presets de datas, intervalo livre, dropdowns com busca, chips de filtro ativo e uma tabela com busca, ordenação e exportação CSV.
 - **Micro-interações discretas.** Título e cartões de KPI entram com um fade curto. As barras crescem quando entram na tela, os números dos KPIs contam até o valor e se animam a cada filtro, e as linhas se desenham. O cabeçalho se esconde ao rolar e o sumário lateral marca o capítulo ativo. A velocidade é configurável, e tudo respeita `prefers-reduced-motion`.
 - **Pesquisas de satisfação (CSAT, CES, NPS)** com estatística honesta:
   - o kit detecta as colunas de nota pelo nome e pela escala;
@@ -23,8 +23,19 @@ Você descreve o relatório em Python (um *spec*). O kit valida o spec, embute o
   - grupos pequenos aparecem sempre, marcados como *amostra pequena*;
   - há análise de impacto (drivers), taxa de resposta e temas dos comentários agrupados offline, com dados pessoais mascarados.
 - **Temas configuráveis.** Fontes (Google Fonts embutidas, arquivo local ou fonte do sistema), cor principal, paleta de dados, cantos, fios, espaçamento, escala tipográfica, hero, movimento e logo. Dois layouts (`clean` e `blocks`) e cinco presets. O build checa o contraste (WCAG, 4,5:1).
+- **Regras de leitura consistentes.**
+  - Uma granularidade de tempo para o relatório inteiro (`time_grain`, automática pelo intervalo dos dados ou definida por você). Ela vale para todos os gráficos de tempo, KPIs e a tabela, e o build falha se um gráfico tentar outra sem `grainOverride`.
+  - A pergunta da pesquisa aparece **completa, exatamente como está no dado**, sem resumo nem reticências.
+  - O texto gerado é literal, sem analogias nem metáforas ("caiu 3 pontos", não "esfriou").
+  - Gráficos, seções e KPIs sem dados são omitidos no build, com aviso. No navegador, um gráfico esvaziado pelo filtro vira uma linha discreta.
+  - A metodologia fica no fim, recolhida, e abre com um clique (no PDF sai aberta).
 - **Um arquivo só.** d3 e Observable Plot vão embutidos, assim como as fontes e o logo. Tem modo claro e escuro, layout responsivo e um PDF pronto para impressão.
 - **QA automático.** `verify.py` abre o relatório no Chromium e checa erros no console, se cada gráfico renderizou, cliques e filtros, a tabela, o modo escuro e a ausência de rolagem lateral no celular. Também tira os screenshots.
+
+<p>
+  <img src="docs/cx-ajuda-e-pergunta.png" width="49%" alt="Ajuda de interação única na barra de filtros e a pergunta da pesquisa completa sob o título do gráfico">
+  <img src="docs/metodologia-recolhida.png" width="49%" alt="Metodologia no fim do relatório, recolhida por padrão">
+</p>
 
 ### Pesquisas de satisfação
 
@@ -191,5 +202,14 @@ The default theme, **Neutro**, is calm and neutral:
 Other presets: `corporativo` (navy block hero), `jornal` (serif, newspaper), `noturno` (dark, lime) and `destaque` (sun-yellow blocks, for presentations).
 
 How it works: **step 0 is a mandatory context pass.** The agent asks only what it can't infer: the goal (which decision the report supports), the audience and its technical level, the key points or hypotheses, and the period. It then profiles the data and sends a short proposal: filters, language and tone, sections (each with its question and chart), KPIs, CX metrics for surveys, theme and assumptions. It builds nothing until the user approves; "go ahead" skips the round and records the assumptions. The answers live in `spec["contexto"]` and steer the headline, the copy and the section order. `"exibir": true` shows them in a discreet footer column. After that come the pandas narrative, `build.py` and `verify.py`.
+
+Reading rules built in:
+
+- one time grain for the whole report (`time_grain`, auto from the data span or set by you), so every time chart, KPI and the table use it, and the build fails on a mismatched chart unless it has `grainOverride`;
+- survey questions are shown verbatim and in full (never shortened or cut with "…");
+- generated copy is literal, with no analogies or metaphors;
+- charts, sections and KPIs without data are omitted at build time (with a warning), and a chart emptied by a filter collapses to one quiet line;
+- interaction help lives in one "Como filtrar" (?) popover instead of on every chart;
+- the methodology is the last block, collapsed by default and expanded in print.
 
 Quick start: `pip install -r requirements.txt && python -m playwright install chromium`, then `python exemplos/vendas/preparar.py` and `python verify.py exemplos/vendas/relatorio.html`. The folder is also a drop-in **AI agent skill** (`SKILL.md`, paths relative to the skill folder). Docs are mostly in Portuguese (pt-BR). Code comments and `SKILL.md` are in English. MIT licensed; bundled third-party licenses are listed in `NOTICE.md`.

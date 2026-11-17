@@ -554,6 +554,7 @@ def prepare(df: pd.DataFrame, mapping: dict, *, segments: dict | list | None = N
             continue
         sc = to_score(df[b["column"]], fam)
         lo, hi = b["scale"]
+        first = len(measures)
         raw_n = int(df[b["column"]].notna().sum())
         out_of = int(((sc < lo) | (sc > hi)).sum())
         sc = sc.where((sc >= lo) & (sc <= hi))
@@ -606,6 +607,10 @@ def prepare(df: pd.DataFrame, mapping: dict, *, segments: dict | list | None = N
                              "description": "Notas 9–10 ÷ respondentes do NPS."})
             measures.append({"key": "detratores", "label": "% detratores", "agg": "ratio", "num": "nps_det", "den": "nps_n", "ci": "wilson", "format": "percent", "good": "down",
                              "description": "Notas 0–6 ÷ respondentes do NPS."})
+        # the survey question, VERBATIM (column header as exported, outer whitespace only): shown under every chart that
+        # reads this score and in the methodology. Never shorten or reword it unless the user asks.
+        for mm in measures[first:]:
+            mm["question"] = str(b.get("question") or b["column"]).strip()
     for fam in ("csat", "ces", "nps"):
         if f"faixa_{fam}" in out:
             dims.append({"key": f"faixa_{fam}", "label": {"nps": "Perfil NPS", "csat": "Faixa CSAT", "ces": "Faixa de esforço"}[fam], "order": BANDS[fam]})

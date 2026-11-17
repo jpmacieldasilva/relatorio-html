@@ -50,6 +50,22 @@ def main():
         (log if cond else problems).append(("✓ " if cond else "✗ ") + msg)
         return cond
 
+    # build-time rule: a chart without data is omitted (warning), and a section left without charts goes with its TOC entry
+    try:
+        import importlib.util
+        bs = importlib.util.spec_from_file_location("kit_build_v", Path(__file__).resolve().parent / "build.py")
+        bm = importlib.util.module_from_spec(bs); bs.loader.exec_module(bm)
+        t = {"fields": {"dims": [{"key": "a"}, {"key": "z"}], "measures": [{"key": "v", "format": "number"}, {"key": "w", "format": "number"}]},
+             "kpis": [{"measure": "v"}, {"measure": "w"}],
+             "sections": [{"id": "s1", "charts": [{"type": "bars", "dim": "a", "measure": "v"}, {"type": "bars", "dim": "a", "measure": "w"}]},
+                          {"id": "s2", "charts": [{"type": "bars", "dim": "z", "measure": "v"}]}],
+             "data": [{"a": "x", "z": None, "v": 1, "w": None}, {"a": "y", "z": None, "v": 2, "w": None}]}
+        w = bm.prune_empty(t, bm._columns(t))
+        okb = [len(s_["charts"]) for s_ in t["sections"]] == [1] and len(t["kpis"]) == 1 and len(w) == 4
+        (log if okb else problems).append(("✓ " if okb else "✗ ") + f"build omits charts/sections/KPIs without data ({len(w)} warnings)")
+    except Exception as e:  # noqa: BLE001
+        problems.append(f"✗ build empty-chart rule could not be checked: {e}")
+
     with sync_playwright() as p:
         browser = p.chromium.launch()
 
@@ -228,6 +244,61 @@ def main():
             want = bool(ctxs.get("exibir"))
             ok((page.locator("#method .about").count() > 0) == want,
                f"contexto in footer {'shown' if want else 'hidden'} (exibir: {str(want).lower()})")
+
+        # 5c) methodology: last block, collapsed by default, opens/closes with the summary, print expands it
+        acc = page.evaluate("""(() => { const d = document.querySelector('#method-acc'); if (!d) return null;
+            const blocks = [...document.querySelectorAll('main > section, #sections > section, #table-section, #method')];
+            return { open: d.open, last: blocks[blocks.length - 1]?.id, summary: !!d.querySelector('summary') }; })()""")
+        ok(bool(acc) and acc["summary"] and not acc["open"] and acc["last"] == "method", f"methodology is last and collapsed by default ({acc})")
+        if acc:
+            page.locator("#method-acc summary").scroll_into_view_if_needed()
+            page.locator("#method-acc summary").click(); page.wait_for_timeout(900)
+            h_open = page.evaluate("(() => { const d = document.querySelector('#method-acc'); return d.open ? d.querySelector('.acc-body').getBoundingClientRect().height : 0; })()")
+            page.locator("#method-acc summary").click(); page.wait_for_timeout(900)
+            closed = page.evaluate("!document.querySelector('#method-acc').open")
+            page.evaluate("window.__report.preparePrint()")
+            printed = page.evaluate("document.querySelector('#method-acc').open")
+            page.evaluate("window.__report.endPrint()"); page.wait_for_timeout(200)
+            after = page.evaluate("!document.querySelector('#method-acc').open")
+            ok(h_open > 40 and closed and printed and after, f"methodology accordion: opens ({h_open:.0f}px), closes, expands for print, re-collapses")
+
+        # 5d) ONE place for interaction help: no per-chart "click to filter" lines
+        per_chart = page.evaluate(r"""[...document.querySelectorAll('figure.chart')].filter(f => /clique para filtrar|shift\s*\+\s*clique|click to filter|shift\s*\+\s*click/i.test(f.textContent)).map(f => f.dataset.chart)""")
+        n_help = page.locator("#btn-help").count()
+        ok(not per_chart and n_help == 1, f"interaction help in one place (help button: {n_help}; per-chart repeats: {per_chart or 'none'})")
+        page.locator("#btn-help").click(); page.wait_for_timeout(300)
+        ok(page.evaluate("document.querySelector('#help-pop').classList.contains('on')"), "help popover opens")
+        page.keyboard.press("Escape"); page.wait_for_timeout(200)
+
+        # 5e) one time grain for every time chart (unless grainOverride)
+        g = page.evaluate("window.__report.grain()")
+        cg = page.evaluate("window.__report.chartGrains()")
+        off = [c for c in cg if c["grain"] != g and not c["override"]]
+        ok(not off, f"single time grain '{g}' across {len(cg)} time charts" + (f" — different: {off}" if off else ""))
+
+        # 5f) survey questions: verbatim from the data, never truncated
+        qs = page.evaluate("window.__report.questions()")
+        if qs:
+            bad = [q for q in qs if q["shown"] != q["expected"]]
+            cut = page.evaluate("""[...document.querySelectorAll('p.question')].filter(p => { const s = getComputedStyle(p);
+                return p.scrollWidth > p.clientWidth + 1 || s.textOverflow === 'ellipsis' || s.webkitLineClamp !== 'none' && s.webkitLineClamp !== '' || p.textContent.trim().endsWith('…'); }).length""")
+            ok(not bad and not cut, f"{len(qs)} survey questions shown in full, verbatim (mismatch: {len(bad)}, truncated: {cut})")
+            trunc = page.evaluate("""[...document.querySelectorAll('.viz svg text, .viz .lbl')].filter(t => t.textContent.trim().endsWith('…')).map(t => t.textContent).slice(0, 5)""")
+            ok(not trunc, f"no chart label cut with '…' ({trunc or 'none'})")
+
+        # 5g) charts with no data: a filter that empties everything collapses each chart to one quiet line (no empty boxes)
+        if page.evaluate("!!window.__report.state.range"):
+            page.evaluate("window.__report.setRange('1901-01-01', '1901-01-31')"); page.wait_for_timeout(300)
+            emp = page.evaluate("""[...document.querySelectorAll('figure.chart')].map(f => ({ id: f.dataset.chart, e: f.classList.contains('is-empty'),
+                h: f.querySelector('.viz').getBoundingClientRect().height, svg: !!f.querySelector('.viz svg') }))""")
+            bad = [e for e in emp if not e["e"] or e["h"] > 60 or e["svg"]]
+            ok(not bad, f"empty charts collapse to one line under a filter with no data ({len(emp)} charts)" + (f" — {bad[:3]}" if bad else ""))
+            page.evaluate("window.__report.reset()"); page.wait_for_timeout(300)
+            back = page.evaluate("document.querySelectorAll('figure.chart.is-empty').length")
+            ok(back == 0, f"charts come back after the filter is cleared ({back} still empty)")
+        n_sec = page.evaluate("document.querySelectorAll('#sections > section').length")
+        n_toc = page.evaluate("document.querySelectorAll('#toc a[data-t]').length")
+        ok(n_toc == n_sec + page.evaluate("document.querySelectorAll('#table-section, #method').length"), f"TOC matches the sections on the page ({n_toc} entries)")
 
         # 6) theme toggle → dark
         page.evaluate("window.scrollTo(0,0)")

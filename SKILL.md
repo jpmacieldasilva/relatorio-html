@@ -77,16 +77,16 @@ Antes de montar, confirma se o plano faz sentido:
 
 **Objetivo:** <decisão que o relatório apoia>
 **Público:** <quem lê> · linguagem <direta | formal>, <leiga | técnica>, pt-BR
-**Período:** <últimos 12 meses vs. 12 anteriores> · recorte: <tudo | …>
+**Período:** <últimos 12 meses vs. 12 anteriores> · recorte: <tudo | …> · granularidade: <mês> em todos os gráficos de tempo
 
 **Filtros:** <Região>, <Canal>, <Categoria>, <UF> + período (12m, ano até hoje, tudo)
 **KPIs:** <Receita (soma)>, <Margem % (Σ margem ÷ Σ receita)>, <Pedidos>, <Ticket médio (Σ receita ÷ Σ pedidos)>
 <só pesquisa: **Métricas:** CSAT = % notas 4–5 em <coluna> (1–5) · CES = média de <coluna> (1–7) · NPS = <coluna> (0–10)>
 
 **Seções:**
-1. <Tendência>: <a receita está crescendo?> → linha semanal com o ano anterior
+1. <Tendência>: <a receita está crescendo?> → linha mensal
 2. <Geografia>: <onde cresce e onde cai?> → barras por região + mapa de UF
-3. <Mix>: <quais categorias puxam a margem?> → barras + dispersão desconto × margem
+3. <Mix>: <quais categorias têm a margem mais baixa?> → barras + dispersão desconto × margem
 4. Tabela detalhada + metodologia
 
 **Pontos-chave que vou responder:** <…> (<sem dados para X; fica de fora>)
@@ -123,12 +123,16 @@ Write for the approved `contexto` (step 0). The headline answers the objetivo, t
 Structure, top to bottom (the template renders it in this order):
 1. **Masthead**: a kicker, a **title that states the main finding** (it is a sentence, not "Sales report"), a 1–2 sentence dek, and the source, period and generation date. Set `meta.sample` whenever the data is synthetic.
 2. **Highlights** (`insights`, 3–5 items): each is a computed fact with its number in bold, plus one line of context. The template shows `insightsScope`, so readers know which window they describe (they don't re-compute on filter).
-3. **KPI row** (3–6 `kpis`): value, delta vs. comparison window (▲▼ colored by `good` direction; rates in **p.p.**), sparkline at the current grain.
+3. **KPI row** (3–6 `kpis`): value, delta vs. comparison window (▲▼ colored by `good` direction; rates in **p.p.**), sparkline at the report's time grain.
 4. **Sections**: each one has a `kicker` ("02 · Geografia"), a `title` that answers its `question`, an optional `lede`, and 1–4 charts.
 5. **Data table**: group by any dim, search, sort, paginate, and two CSV exports (the table view and the raw filtered rows).
-6. **Methodology and data quality**: measure definitions (from `description`), cleaning steps, quality limits, the colophon and, when `contexto.exibir` is true, a "Sobre este relatório" column.
+6. **Methodology and data quality**: always the **last** block and **collapsed by default** (an accessible `<details>` accordion that opens smoothly; print/PDF and the TOC link expand it). It holds measure definitions (from `description`, plus the verbatim survey question), cleaning steps, quality limits, the colophon and, when `contexto.exibir` is true, a "Sobre este relatório" column.
 
-**Never invent a number or a direction.** Every sentence with a number or a claim ("grows", "falls", "peak at Black Friday") is generated from pandas results in the same script, with the wording derived from the sign. Example: `"encolhe" if g < 0 else "cresce menos"`. Name an event ("Black Friday") only if the computed peak really contains its date. Compute insights with the **same windows the HTML uses**: the `12m` preset = (max date − 12 months + 1 day … max date), and `yoy` compares the same dates one year earlier. Then check that your text matches the KPI row in the screenshot. If the data doesn't support a strong headline, write a neutral one.
+**Never invent a number or a direction.** Every sentence with a number or a claim ("grows", "falls", "peak at Black Friday") is generated from pandas results in the same script, with the wording derived from the sign. Example: `"cai" if g < 0 else "cresce menos"`. Name an event ("Black Friday") only if the computed peak really contains its date. Compute insights with the **same windows the HTML uses**: the `12m` preset = (max date − 12 months + 1 day … max date), and `yoy` compares the same dates one year earlier. Then check that your text matches the KPI row in the screenshot. If the data doesn't support a strong headline, write a neutral one.
+
+**Literal language — no analogies or metaphors.** This holds for titles, highlights, ledes, chart subtitles, notes, methodology and the delivery message. Use the plainest literal terms: "caiu 3 pontos", not "esfriou"; "o grupo que mais reduz o CSAT", not "quem puxa a nota para baixo"; "cresce menos", not "fica para trás"; "grupos com CSAT abaixo do restante", not "onde a experiência quebra". Banned in generated copy: temperature, motion, body, war, sports and weather images ("esfria", "aquece", "decola", "despenca", "freia", "puxa", "segura", "fôlego", "termômetro", "raio-x", "vilão", "campeão", "tempestade"…). Statistical terms such as "margem de erro" are literal and fine. Verbs: `sobe`, `cai`, `cresce`, `fica estável`, `fica acima/abaixo de`, `reduz`, `aumenta`.
+
+**Survey questions are shown verbatim.** Whenever a chart, KPI or definition refers to a survey question, the report shows the **complete question exactly as it is in the data** (the column header or question text, outer whitespace trimmed only, including prefixes like "Q2."). Never generate a shortened, paraphrased or "cleaned" version unless the user asks for one. `cx.prepare` stores it as `measure["question"]`. The template prints it under the chart title ("Pergunta …") for every chart that reads that score, puts it in the methodology definitions and in the KPI label tooltip, and wraps long text (no "…"). Chart titles may describe the chart, but must not restate the question in other words. Columns whose header is itself a question (e.g. "Resolvido no 1º contato?") keep it as their label. Use `c.question` for an explicit text, or `false` to hide it on one chart.
 
 ## 5. Chart selection rules
 
@@ -136,7 +140,7 @@ Pick the chart by the question, not by variety:
 
 | Question | Type (`spec.type`) | Notes |
 |---|---|---|
-| How does it evolve? | `line` | auto grain; `series` (≤5) gets direct end labels, never a legend; `annotations` for events; the peak is auto-annotated |
+| How does it evolve? | `line` | the report's single time grain; `series` (≤5) gets direct end labels, never a legend; `annotations` for events; the peak is auto-annotated |
 | How do categories rank? | `bars` | HTML bars, sorted, zero-based, value + share labels, comparison tick for the previous period; top N + "outros" |
 | How do a few categories (≤ 6) compare, as a headline? | `columns` | tall flat columns with big numbers on top; `top` (5), `share`, `height`; best full-width |
 | What share does each part have? | `share` | 100% strip with direct labels; replaces pie charts; slices < 2% are folded |
@@ -160,13 +164,14 @@ Principles (Tufte, Few, Cleveland), already built into the template. Don't fight
 - Prefer **small multiples over spaghetti**: past 4–5 lines, switch to `multiples`.
 - Use color for meaning only: the theme's accent for data, its `context` grey for context. The ↑/↓ pair is the theme's positive/negative colors and every delta also carries ▲/▼ or a sign. Text contrast is ≥ 4.5:1 in both themes (data colors are fills, never small text).
 - Format numbers in the report's locale (`Intl`, from `meta.lang` + `meta.currency`): compact on axes (`R$ 1,2 mi`), full in tooltips and the table. Changes are % for amounts and **p.p.** for rates.
-- Chart titles state the takeaway when it holds under filtering, otherwise they describe the content. Subtitles give the unit and how to read the chart. Use `note` for caveats.
-- Half-width charts showing noisy daily data can take `"grain": "month"` (the coarsest grain the chart may use).
+- Chart titles state the takeaway when it holds under filtering, otherwise they describe the content. Subtitles give the unit and how to read the chart. Use `note` for caveats **specific to that chart**. Never write "clique para filtrar", "Shift+clique…" or other interaction instructions in a chart: they live in ONE place, the "Como filtrar" (?) help in the filter bar.
+- **One time grain per report.** `spec["time_grain"]` (`day|week|month|quarter|year`, or `"auto"`, the default) applies to every time chart (`line`, `multiples`, `trendci`), KPI sparkline, tooltip, annotation bucket and the table's "Período" grouping. Changing the date filter does not change it. `build.py` resolves `auto` from the data span: ≤ 92 days → day, ≤ ~18 months → week, ≤ 6 years → month, otherwise quarter. It never goes finer than the data (`meta.minGrain`, or a fact that is already monthly or weekly), and it prints the choice. A chart with a different `"grain"` **fails the build** unless it also has `"grainOverride": true` (use it rarely, and say so in the subtitle). Write the copy in the same grain ("mês de maior receita", "Respostas por mês"). Compute the Python insights with the same buckets.
+- **No empty charts.** At build time, a chart whose measure, dim or field has no data at all is omitted with a `spec: warning`. A section left without charts goes too, along with its TOC and menu entry, and so does a KPI with no data. In the browser, a chart that a filter empties collapses to one quiet line ("Sem dados para os filtros atuais"), and its subtitle, legend and notes fold away. Periods and categories with **n = 0** are dropped from series and bars. Groups with **n > 0** always show, and small samples (n < minN) are flagged, never hidden.
 
 ## 6. Interactivity (provided by the template)
 
 - **Global filters**: date presets (`12m`, `ytd`, `24m`, `90d`, `30d`, `all`) plus a custom range popover, multi-select dropdowns with search and live counts, active-filter chips, "Limpar filtros", and an "N / total" counter.
-- **Cross-filtering**: every component re-renders from the filtered rows. Clicking a bar, a share segment, a scatter dot, a heatmap cell, a change or dumbbell row, or a small-multiple title filters the whole report (Shift-click adds to the selection). A chart ignores its own dimension's filter, so the selection is shown as a highlight and the alternatives stay visible.
+- **Cross-filtering**: every component re-renders from the filtered rows. Clicking a bar, a share segment, a scatter dot, a heatmap cell, a change or dumbbell row, or a small-multiple title filters the whole report (Shift-click adds to the selection). How to interact is explained once, in the filter bar's "Como filtrar" (?) popover (`T.helpItems`). Charts carry no per-chart hint. A chart ignores its own dimension's filter, so the selection is shown as a highlight and the alternatives stay visible.
 - Tooltips on every mark, and a hover crosshair on time series.
 - Responsive layout: 1440 grid (section text in a 688 px main column; charts in the main column, or the wide column when a section has `half`/`third` charts, `columns`, or `"wide": true`); `span: full|half|third|twothirds`; halves stack under 1240 px, everything is one column under 1100 px. On phones the filter bar scrolls horizontally and the KPIs sit in two columns.
 - **Motion** (theme `motion.speed` scales every duration — the default theme runs at 0.65×; off with `motion.enabled: false`, `prefers-reduced-motion` or `?static=1`):
@@ -176,7 +181,7 @@ Principles (Tufte, Few, Cleveland), already built into the template. Don't fight
   - Navigation: the header hides on scroll down and returns on scroll up. The sticky left TOC marks the active chapter with a primary-color bar on a hairline rail. The chapter menu slides in as a side drawer.
 - Light/dark: toggle, `prefers-color-scheme`, and persistence; `?theme=dark` forces a theme for screenshots. Charts re-render with resolved theme colors.
 - **Print / PDF**: the PDF button or Ctrl+P re-renders at A4 width in light theme, hides the controls, prints a summary of the applied filters, and avoids breaks inside charts.
-- Hooks for QA and debugging: `window.__report.{state, setCats, toggleCat, setRange, preset, reset, revealAll, preparePrint, endPrint, stat, statFiltered, checks}`.
+- Hooks for QA and debugging: `window.__report.{state, setCats, toggleCat, setRange, preset, reset, revealAll, preparePrint, endPrint, stat, statFiltered, checks, grain, chartGrains, questions}`.
 
 ## 7. The spec (what you write in Python)
 
@@ -186,6 +191,7 @@ spec = {
            "lang": "pt-BR", "currency": "BRL", "compare": "yoy",  # or "previous"
            "theme": "auto", "minGrain": "day", "slug": "nome-arquivo",  # theme here = light/dark/auto
            "numberSections": True},  # h2 gets "1. ", "2. "…
+  "time_grain": "auto",                    # ONE grain for every time chart / KPI / table period: auto | day | week | month | quarter | year
   "fields": {"date": "data", "dims": [{"key": "regiao", "label": "Região"}, ...], "measures": [...]},
   "filters": {"datePresets": ["12m", "ytd", "all"], "defaultPreset": "12m", "categorical": ["regiao", "canal"]},
   "kpis": [{"measure": "receita"}, {"measure": "margem"}],
@@ -236,6 +242,7 @@ Use `cx.py` whenever the data is survey answers (one row per response). Follow `
 - `csat_n`, `csat_top`; `ces_n`, `ces_sum`, `ces_sq`, `ces_facil`; `nps_n`, `nps_pro`, `nps_det`.
 - Score-band dims: `faixa_nps` (Detratores / Neutros / Promotores), `faixa_csat`, `faixa_ces`.
 - `prep.measures`, `prep.dims`, `prep.stats` and `prep.log`; the log lists out-of-scale answers and merged case variants and goes into the methodology.
+- Each score measure carries `question`: the column header, verbatim. Don't rename it, and don't relabel question-type segment columns either. Short labels are fine only for plain field names ("Plano contratado" → "Plano").
 - Blank answers count in `respostas` but never in a metric's denominator.
 
 Every metric is a ratio of sums, so it stays exact under any filter:
@@ -285,7 +292,7 @@ Table measures: `respostas`, `csat`, `ces`, `nps`, `taxa_resposta`. KPIs: CSAT, 
 ```bash
 python3 $KIT/verify.py relatorio.html --pdf
 ```
-It checks for zero console, page or request errors; that every chart rendered; bar, dropdown, custom-range, preset and Plot-mark clicks all change state and KPIs; that chips appear and reset works; table search, sort and CSV download; the dark toggle; no horizontal overflow on a 390 px phone (the layout viewport must stay 390); that charts below the fold wait for the scroll and a bar list grows in when reached; and that `prefers-reduced-motion` renders everything final. On survey reports it also checks that the browser's metric values, CIs and n equal `spec["checks"]`, that KPI cards show the CI, that Likert / NPS / theme rows filter on click and have tooltips, that CI-dot and driver-bar clicks filter, and that small samples are present and flagged. Full-page screenshots are taken with every reveal forced to its final state. It writes `-desktop-light`, `-desktop-dark`, `-mobile` (full page), `-hero-*` (first viewport) PNGs and a PDF.
+It checks for zero console, page or request errors; that every chart rendered; bar, dropdown, custom-range, preset and Plot-mark clicks all change state and KPIs; that chips appear and reset works; table search, sort and CSV download; the dark toggle; no horizontal overflow on a 390 px phone (the layout viewport must stay 390); that charts below the fold wait for the scroll and a bar list grows in when reached; and that `prefers-reduced-motion` renders everything final. It also checks the report rules: the methodology is the last block, collapsed by default, opens and closes, and expands for print; interaction help appears once (no per-chart "clique para filtrar"); every time chart uses the single report grain; survey questions are shown verbatim and never cut with "…"; a filter with no data collapses every chart to one line and the charts return on reset; the TOC matches the sections on the page; and `build.py` omits charts, sections and KPIs without data. On survey reports it also checks that the browser's metric values, CIs and n equal `spec["checks"]`, that KPI cards show the CI, that Likert / NPS / theme rows filter on click and have tooltips, that CI-dot and driver-bar clicks filter, and that small samples are present and flagged. Full-page screenshots are taken with every reveal forced to its final state. It writes `-desktop-light`, `-desktop-dark`, `-mobile` (full page), `-hero-*` (first viewport) PNGs and a PDF.
 Then **look at the screenshots** (crop tall pages into chunks) and fix what a picky designer would notice: misalignment, clipped or colliding labels, a title that contradicts a KPI, empty charts, a legend where direct labels fit, an unreadable dark mode. Rebuild and re-run until it is clean. Never deliver on a failing `verify.py`.
 
 ## 9. Delivery
