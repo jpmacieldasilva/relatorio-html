@@ -14,7 +14,8 @@ Você descreve o relatório em Python (um *spec*). O kit valida o spec, embute o
 ## O que faz
 
 - **Visualização editorial.** O título afirma o achado. Os destaques são calculados, os KPIs vêm com variação e minigráfico, e cada seção responde a uma pergunta. Seguem as regras de Tufte, Few e Cleveland: rótulos diretos, barras a partir do zero, nada de pizza com muitas fatias, nada de 3D, nada de dois eixos.
-- **Filtro cruzado em tudo.** Clicar numa barra, segmento, ponto, célula ou tema filtra o relatório inteiro (Shift soma à seleção). As instruções de uso ficam num lugar só, o botão "Como filtrar" (?) na barra de filtros, sem repetir em cada gráfico. Há também presets de datas, intervalo livre, dropdowns com busca, chips de filtro ativo e uma tabela com busca, ordenação e exportação CSV.
+- **Filtro cruzado em tudo.** Clicar numa barra, segmento, ponto, célula ou tema filtra o relatório inteiro (Shift soma à seleção). As instruções de uso ficam num lugar só, o botão "Como filtrar" (?) na barra de filtros, sem repetir em cada gráfico. Há também presets de datas, intervalo livre, dropdowns com busca (no desktop o valor escolhido aparece dentro do próprio dropdown, com um × para limpar; no celular, como chip), um contador na unidade do relatório ("R$ 3,6 mi de R$ 6,2 mi") e uma tabela com busca, ordenação e exportação CSV.
+- **Texto fixo, números vivos.** O resumo, os destaques e os títulos com números são calculados em Python para a visão padrão e nunca são reescritos no navegador. Com um filtro ativo, aparece ao lado deles uma nota discreta "Visão sem filtros"; os números e os gráficos seguem o filtro.
 - **Micro-interações discretas.** Título e cartões de KPI entram com um fade curto. As barras crescem quando entram na tela, os números dos KPIs contam até o valor e se animam a cada filtro, e as linhas se desenham. O cabeçalho se esconde ao rolar e o sumário lateral marca o capítulo ativo. A velocidade é configurável, e tudo respeita `prefers-reduced-motion`.
 - **Pesquisas de satisfação (CSAT, CES, NPS)** com estatística honesta:
   - o kit detecta as colunas de nota pelo nome e pela escala;
@@ -30,7 +31,13 @@ Você descreve o relatório em Python (um *spec*). O kit valida o spec, embute o
   - Gráficos, seções e KPIs sem dados são omitidos no build, com aviso. No navegador, um gráfico esvaziado pelo filtro vira uma linha discreta.
   - A metodologia fica no fim, recolhida, e abre com um clique (no PDF sai aberta).
 - **Um arquivo só.** d3 e Observable Plot vão embutidos, assim como as fontes e o logo. Tem modo claro e escuro, layout responsivo e um PDF pronto para impressão.
-- **QA automático.** `verify.py` abre o relatório no Chromium e checa erros no console, se cada gráfico renderizou, cliques e filtros, a tabela, o modo escuro e a ausência de rolagem lateral no celular. Também tira os screenshots.
+- **Acessível.** Quem filtra pelo teclado continua no mesmo item depois do redesenho, uma linha `aria-live` anuncia o filtro, Esc devolve o foco ao dropdown, cada gráfico é uma imagem com nome, os cabeçalhos da tabela são botões com `aria-sort`, textos pequenos passam de 4,5:1 (também no escuro e sobre o hero colorido) e os botões do celular têm 44 px.
+- **QA automático.** `verify.py` abre o relatório no Chromium e checa erros no console, se cada gráfico renderizou, cliques e filtros, a tabela, o modo escuro e a ausência de rolagem lateral no celular. Em 1440, 1024 e 390 px, claro e escuro, também confere rótulos sobrepostos ou fora do gráfico, contraste dos textos pequenos, foco e anúncios depois de filtrar. Também tira os screenshots.
+
+<p>
+  <img src="docs/vendas-filtro-visao-sem-filtros.png" width="62%" alt="Filtro ativo: o valor aparece no dropdown e o resumo ganha a nota Visão sem filtros">
+  <img src="docs/vendas-mobile-colunas.png" width="30%" alt="Colunas no celular: o nome da região fica acima do valor">
+</p>
 
 <p>
   <img src="docs/cx-ajuda-e-pergunta.png" width="49%" alt="Ajuda de interação única na barra de filtros e a pergunta da pesquisa completa sob o título do gráfico">

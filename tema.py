@@ -97,11 +97,13 @@ def best_ink(bg: str, prefer: str | None = None, dark="#000000", light="#FFFFFF"
     return dark if contrast(dark, bg) >= contrast(light, bg) else light
 
 
-def text_variant(color: str, bg: str, ink: str, target=4.5) -> str:
-    """the closest shade of `color` (mixed toward `ink`) that reads as text on `bg`"""
-    for i in range(0, 21):
-        c = mix(color, ink, i / 20)
-        if contrast(c, bg) >= target:
+def text_variant(color: str, bg, ink: str, target=4.5) -> str:
+    """the closest shade of `color` (mixed toward `ink`) that reads as text on `bg` —
+    `bg` may be a list (page, card, hover row): the shade must pass on the hardest of them"""
+    bgs = [bg] if isinstance(bg, str) else list(bg)
+    for i in range(0, 41):
+        c = mix(color, ink, i / 40)
+        if min(contrast(c, b) for b in bgs) >= target:
             return c
     return ink
 
@@ -541,7 +543,9 @@ def resolve(theme_spec=None, base_dir: str | Path | None = None, *, legacy_meta:
             "--primary": primary, "--primary-text": text_variant(primary, bg, ink),
             "--hero-ink": hero_ink, "--hero-muted": muted_on(primary, hero_ink), "--hero-rule": mix(primary, hero_ink, 0.85),
             "--accent": accent, "--accent-deep": text_variant(accent, bg, ink), "--accent-ink": accent_ink,
-            "--pos": pos, "--pos-ink": text_variant(pos, bg, ink), "--neg": neg, "--neg-ink": text_variant(neg, bg, ink),
+            "--pos": pos, "--pos-ink": text_variant(pos, [bg, surface, surface2], ink), "--neg": neg, "--neg-ink": text_variant(neg, [bg, surface, surface2], ink),
+            # good/bad deltas on the colored hero block (blocks layout) — light tints that still pass 4.5:1 there
+            "--hero-pos": text_variant(m.get("heroPos", pos), primary, hero_ink), "--hero-neg": text_variant(m.get("heroNeg", neg), primary, hero_ink),
             "--context": m.get("context", mix(bg, ink, 0.1)), "--line": m.get("line", ink),
             "--tip-bg": tip_bg, "--tip-ink": tip_ink,
             "--heat-lo": seq[0], "--heat-mid": seq[1], "--heat-hi": seq[2], "--heat-ink-hi": best_ink(seq[2]),

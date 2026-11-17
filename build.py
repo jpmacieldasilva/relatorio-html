@@ -431,6 +431,41 @@ def load_tema_module():
     return mod
 
 
+_DOUBLE_DOT = re.compile(r"(p\.p\.|etc\.|\bvs\.)(\*\*|\*|_)?\.(?=\s|$)")   # also "**4,5 p.p.**." (bold closes first)
+
+
+def tidy_copy(spec: dict) -> list[str]:
+    """Copy hygiene before render (in place): an abbreviation that ends a sentence keeps ONE period
+    ("4,5 p.p.." → "4,5 p.p."), and chart subtitles are sentences — a lowercase start gets a warning
+    (it is copy, so it is flagged, never rewritten)."""
+    warns: list[str] = []
+    fix = lambda t: _DOUBLE_DOT.sub(r"\1\2", t) if isinstance(t, str) else t
+    meta = spec.get("meta")
+    if isinstance(meta, dict):
+        spec["meta"] = meta = dict(meta)
+        for k in ("subtitle", "title"):
+            meta[k] = fix(meta.get(k)) if k in meta else meta.get(k)
+        meta = {k: v for k, v in meta.items() if v is not None}; spec["meta"] = meta
+    if spec.get("insights"):
+        spec["insights"] = [dict(x, **{k: fix(x[k]) for k in ("title", "text") if k in x}) for x in spec["insights"]]
+    secs = []
+    for s in spec.get("sections", []):
+        s = dict(s, **{k: fix(s[k]) for k in ("title", "lede") if k in s})
+        charts = []
+        for c in s.get("charts", []):
+            c = dict(c, **{k: fix(c[k]) for k in ("title", "subtitle", "note") if k in c})
+            sub = c.get("subtitle")
+            if isinstance(sub, str) and sub[:1].islower():
+                warns.append(f"chart '{c.get('title', c.get('type'))}': subtitle starts in lowercase (\"{sub[:40]}\") — write it as a sentence (\"Respostas recebidas.\")")
+            charts.append(c)
+        if "charts" in s:
+            s["charts"] = charts
+        secs.append(s)
+    if "sections" in spec:
+        spec["sections"] = secs
+    return warns
+
+
 def build(spec: dict, out: str | Path, *, cdn: bool = False, fonts: bool = True, strict: bool = True,
           theme=None, base_dir: str | Path | None = None) -> Path:
     """theme= overrides spec["theme"] (preset name, path to JSON, or dict of overrides).
@@ -465,6 +500,8 @@ def build(spec: dict, out: str | Path, *, cdn: bool = False, fonts: bool = True,
         spec["time_grain"] = grain
         spec["meta"] = dict(spec.get("meta", {}), grain=grain)
         print(f"time grain: {grain} ({why})", file=sys.stderr)
+    for w in tidy_copy(spec):
+        print("spec: warning:", w, file=sys.stderr)
     for w in prune_empty(spec, cols):
         print("spec: warning:", w, file=sys.stderr)
     spec["sections"] = [dict(s) for s in spec.get("sections", [])]

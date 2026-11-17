@@ -211,7 +211,7 @@ spec = {
          "question": "Quais categorias crescem, e quanto isso custa em margem?",
          "charts": [
              {"type": "bars", "dim": "categoria", "measure": "receita", "width": "half", "title": "Receita por categoria"},
-             {"type": "dumbbell", "dim": "categoria", "measure": "margem", "width": "half", "marginLeft": 104, "sort": "value",
+             {"type": "dumbbell", "dim": "categoria", "measure": "margem", "width": "half", "sort": "value",
               "title": "Margem bruta por categoria", "subtitle": "Variação em p.p. contra o ano anterior."},
              {"type": "multiples", "dim": "categoria", "measure": "receita",
               "scale": "independent",
@@ -220,9 +220,9 @@ spec = {
         {"id": "quando", "kicker": "Sazonalidade", "toc": "Sazonalidade", "title": "Quando cada categoria vende",
          "question": "Em quais meses cada categoria vende mais?",
          "charts": [
-             {"type": "heatmap", "x": "$month", "y": "categoria", "measure": "receita", "marginLeft": 112,
-              "title": "Receita por mês e categoria", "subtitle": "Receita em R$; quanto mais escuro, maior. Repare em Beleza em maio (Dia das Mães)."},
-             {"type": "heatmap", "x": "$weekday", "y": "canal", "measure": "pedidos", "width": "half", "marginLeft": 96, "cellHeight": 30,
+             {"type": "heatmap", "x": "$month", "y": "categoria", "measure": "receita", "normalize": "row",
+              "title": "Receita por mês e categoria", "subtitle": "Cor relativa a cada linha: o mês mais escuro é o maior daquela categoria. Repare em Beleza em maio (Dia das Mães)."},
+             {"type": "heatmap", "x": "$weekday", "y": "canal", "measure": "pedidos", "width": "half", "cellHeight": 30,
               "title": "Pedidos por dia da semana e canal"},
              {"type": "bars", "dim": "uf", "measure": "ticket", "top": 10, "width": "half", "share": False,
               "title": "Ticket médio por UF, 10 maiores", "subtitle": "Receita ÷ pedidos."},

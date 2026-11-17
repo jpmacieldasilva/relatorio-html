@@ -129,7 +129,7 @@ insights = [
 if len(worst):
     w0 = worst.iloc[0]
     lbl = {d["key"]: d["label"] for d in prep.dims}
-    insights.append({"title": f"**{lbl[w0['dim']]}: {w0['grupo']}** é o grupo que mais reduz o CSAT geral",
+    insights.append({"title": f"**{lbl[w0['dim']]}{' ' if lbl[w0['dim']].rstrip()[-1:] in '?:' else ': '}{w0['grupo']}** é o grupo que mais reduz o CSAT geral",
                      "text": f"impacto de {cx.fmt_diff(w0['impact'], M['csat'])} no geral (CSAT {v(cx.Stat(w0['v'], w0['n']), 'csat')} vs. {v(cx.Stat(w0['rest'], 0), 'csat')} no restante; diferença significativa após correção de Holm, {cx.fmt_p(w0['padj'])})."})
 if norte_t:
     word = (f"cai {cx.fmt_diff(-norte_t['d'], M['csat']).lstrip('+')} — queda significativa ({cx.fmt_p(norte_t['p'])})" if norte_t["sig"] and norte_t["d"] < 0
@@ -179,7 +179,7 @@ spec = {
          "question": "A nota mudou além da margem de erro? A faixa mostra o intervalo de confiança de 95% de cada mês.",
          "charts": [
              {"type": "trendci", "measure": "csat", "width": "half", "title": "CSAT mensal", "subtitle": "% de notas 4–5 · faixa = IC 95% · ponto vazado = amostra pequena"},
-             {"type": "trendci", "measure": "nps", "width": "half", "title": "NPS mensal", "subtitle": "pontos (−100 a +100) · faixa = IC 95%"},
+             {"type": "trendci", "measure": "nps", "width": "half", "title": "NPS mensal", "subtitle": "Pontos (−100 a +100) · faixa = IC 95%."},
              {"type": "likert", "field": "csat_nota", "scale": [1, 5], "dim": "canal", "title": "Distribuição das notas de CSAT por canal",
               "subtitle": "Notas 1–2 à esquerda do eixo, 4–5 à direita, 3 dividida ao meio. % nas pontas = insatisfeitos e satisfeitos.",
               "labels": {"1": "1 · Muito insatisfeito", "2": "2", "3": "3 · Neutro", "4": "4", "5": "5 · Muito satisfeito"}},
@@ -213,11 +213,11 @@ spec = {
         {"id": "volume", "kicker": "Operação", "toc": "Volume", "title": "Volume e taxa de resposta",
          "question": "Quantas pessoas respondem, e quantas das convidadas?",
          "charts": [
-             {"type": "line", "measure": "respostas", "width": "half", "title": "Respostas por mês", "subtitle": "respostas recebidas"},
-             {"type": "trendci", "measure": "taxa_resposta", "width": "half", "title": "Taxa de resposta", "subtitle": "respostas ÷ pesquisas enviadas · IC 95%"},
-             {"type": "bars", "dim": "canal", "measure": "respostas", "width": "third", "title": "Respostas por canal", "subtitle": "respostas no período · tique = período anterior"},
-             {"type": "bars", "dim": "regiao", "measure": "respostas", "width": "third", "title": "Respostas por região", "subtitle": "respostas no período · tique = período anterior"},
-             {"type": "bars", "dim": "plano", "measure": "respostas", "width": "third", "title": "Respostas por plano", "subtitle": "respostas no período · tique = período anterior"},
+             {"type": "line", "measure": "respostas", "width": "half", "title": "Respostas por mês", "subtitle": "Respostas recebidas."},
+             {"type": "trendci", "measure": "taxa_resposta", "width": "half", "title": "Taxa de resposta", "subtitle": "Respostas ÷ pesquisas enviadas · faixa = IC 95%."},
+             {"type": "bars", "dim": "canal", "measure": "respostas", "width": "third", "title": "Respostas por canal", "subtitle": "Respostas no período."},
+             {"type": "bars", "dim": "regiao", "measure": "respostas", "width": "third", "title": "Respostas por região", "subtitle": "Respostas no período."},
+             {"type": "bars", "dim": "plano", "measure": "respostas", "width": "third", "title": "Respostas por plano", "subtitle": "Respostas no período."},
          ]},
     ],
     "table": {"groupBy": ["canal", "motivo", "uf", "regiao", "plano", "tema"], "measures": ["respostas", "csat", "ces", "nps", "taxa_resposta"], "raw": False, "pageSize": 12},

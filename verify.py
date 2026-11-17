@@ -10,7 +10,7 @@ Checks
     • every <figure.chart> rendered (data-rendered="1") and actually drew something
     • no horizontal overflow on mobile (390 px)
     • cross-filter: clicking a bar, a dropdown checkbox and a date preset changes state + KPIs;
-      chips appear; "Limpar filtros" resets; clicking a Plot mark (scatter/heatmap/dumbbell/ci/drivers) filters
+      the value shows in its dropdown; "Limpar filtros" resets; clicking a Plot mark (scatter/heatmap/dumbbell/ci/drivers) filters
     • survey reports: the browser's CSAT/CES/NPS values and CIs equal the Python ones (spec["checks"]),
       Likert / NPS / theme rows filter on click, tooltips carry the CI, small groups are flagged (never hidden)
     • table: search narrows rows, header click sorts, CSV download fires
@@ -21,6 +21,16 @@ Checks
     • header zone: hero, summary, KPIs and the (stuck) filter bar span the whole page width at 1440 / 1280 px;
       the chapter menu is hidden + inert at the top, fades in after the header, hides again at the top, and
       never overlaps the header, filter bar, hero or summary
+    • UX refinements at 1440 / 1024 / 390 px, light and dark: no overlapping text inside a chart SVG and no axis label
+      outside its figure; HTML bar value clear of the previous-period tick; Likert sides filled to the centre axis;
+      phone columns: name above the number, number inside its column; small text (KPI deltas, chips, drawer
+      numbers, significance marks, filter count, notes) ≥ 4.5:1 against its real background; every chart SVG is a
+      named image (role=img + aria-label) and every figure is labelled by its title; table headers are buttons with
+      aria-sort on the th; the closed help popover is inert; phone header buttons ≥ 44 px; phone table keeps its
+      first column sticky
+    • keyboard + screen reader: a filter set with Enter keeps focus on the same mark after the re-render, the
+      status line (role=status, aria-live) announces it, Escape in a dropdown returns focus to its button, a
+      drawer link focuses the section heading; the "Visão sem filtros" note shows only while a filter is on
 Outputs
     <name>-desktop-light.png, <name>-desktop-dark.png, <name>-mobile.png (full page)
     <name>-hero-light.png / -hero-dark.png (first viewport, good for chat previews)
@@ -182,7 +192,8 @@ def main():
             kpi1 = page.evaluate("[...document.querySelectorAll('.kpi .value')].map(e=>e.textContent)")
             ok(st1["rows"] < st0["rows"] and any(label in v for v in st1["cats"].values()), f"bar click filters ('{label}': {st0['rows']} → {st1['rows']} rows)")
             ok(kpi1 != kpi0, "KPIs change after bar filter")
-            ok(page.locator("#chips .chip").count() >= 1, "filter chip shown")
+            ok(label in page.locator(".dd.active .dd-v").first.inner_text() and page.locator(".dd.active .dd-x").count() >= 1,
+               "filter value shown inside its dropdown, with a clear × (desktop: no separate chip row)")
             charts_ok(page, "after bar filter")
             page.locator("#clear-all").click()
             page.wait_for_timeout(200)
@@ -191,7 +202,7 @@ def main():
         # 2) dropdown multi-select
         dd = page.locator(".dd:not(.daterange)").first
         if dd.count():
-            dd.locator("> button").click()
+            dd.locator("> button:first-child").click()
             page.wait_for_timeout(150)
             dd.locator(".opts label").nth(1).click()
             page.wait_for_timeout(200)
@@ -424,6 +435,113 @@ def main():
             ok((t is None) == (vw < 1100), f"grid {vw}px: chapter rail {'hidden — menu in the drawer' if vw < 1100 else 'shown'}")
             ok(not errs, f"grid {vw}px: no console/page errors" + (f" — {errs[:3]}" if errs else ""))
             ctx.close()
+
+
+        # ---------------- UX refinements (t78): 1440 / 1024 / 390 × light / dark
+        UX_JS = r"""() => {
+          const lum = c => { const m = c.match(/[\d.]+/g); if (!m) return null; const [r, g, b] = m.slice(0, 3).map(v => { v = +v / 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }); return { L: .2126 * r + .7152 * g + .0722 * b, a: m[3] == null ? 1 : +m[3] }; };
+          const bgOf = el => { for (let e = el; e; e = e.parentElement) { const c = getComputedStyle(e).backgroundColor, l = lum(c); if (l && l.a > 0.5) return c; } return getComputedStyle(document.body).backgroundColor; };
+          const cr = (a, b) => { const x = lum(a).L, y = lum(b).L; return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+          const vis = e => { const r = e.getBoundingClientRect(), cs = getComputedStyle(e); return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none' && +cs.opacity > 0.05; };
+          const hit = (a, b, p = 1) => a.left < b.right - p && a.right > b.left + p && a.top < b.bottom - p && a.bottom > b.top + p;
+          const out = { overlap: [], outside: [], barTick: [], likert: [], cols: [], contrast: [], svgName: [], figName: [], th: [], help: null, touch: [], sticky: null };
+          // 1) text inside each chart SVG: no two visible labels overlap; nothing sits left of the figure
+          for (const fig of document.querySelectorAll('figure.chart:not(.is-empty)')) {
+            const fr = fig.getBoundingClientRect();
+            for (const sv of fig.querySelectorAll('.viz svg')) {
+              if (sv.parentElement.closest('svg')) continue;
+              const ts = [...sv.querySelectorAll('text')].filter(t => t.textContent.trim() && vis(t) && t.closest('g')?.getAttribute('aria-label') !== 'tip').map(t => ({ t, r: t.getBoundingClientRect() }));
+              for (let i = 0; i < ts.length; i++) {
+                if (ts[i].r.left < fr.left - 2 || ts[i].r.right > fr.right + 2) out.outside.push(`${fig.dataset.chart}: "${ts[i].t.textContent}"`);
+                for (let j = i + 1; j < ts.length; j++) if (hit(ts[i].r, ts[j].r, 1.5)) out.overlap.push(`${fig.dataset.chart}: "${ts[i].t.textContent}" × "${ts[j].t.textContent}"`);
+              }
+              if (sv.closest('.viz') && sv.getBoundingClientRect().width > 60 && !(sv.getAttribute('role') === 'img' && sv.getAttribute('aria-label'))) out.svgName.push(fig.dataset.chart);
+            }
+            const lb = fig.getAttribute('aria-labelledby'); if (!(lb && document.getElementById(lb)) && !fig.getAttribute('aria-label')) out.figName.push(fig.dataset.chart);
+          }
+          // 2) HTML bars: value clear of the previous-period tick
+          for (const b of document.querySelectorAll('.bars .bar')) { const v = b.querySelector('.val'), t = b.querySelector('.prev'); if (v && t && vis(t) && hit(v.getBoundingClientRect(), t.getBoundingClientRect(), 0.5)) out.barTick.push(b.querySelector('.lbl')?.textContent); }
+          // 3) Likert: each side's segments fill the side (stack touches the centre axis)
+          for (const s of document.querySelectorAll('.lk-side')) { const w = s.getBoundingClientRect().width, f = [...s.children].reduce((a, i) => a + i.getBoundingClientRect().width, 0); if (w > 4 && Math.abs(w - f) > 2) out.likert.push(`${s.closest('.lk-row')?.querySelector('.lbl')?.textContent}: ${f.toFixed(0)}/${w.toFixed(0)}px`); }
+          // 4) columns: name never over the number; the number stays inside its column
+          for (const c of document.querySelectorAll('.cols .col')) { const l = c.querySelector('.lbl'), n = c.querySelector('.num'); if (!l || !n) continue; const lr = l.getBoundingClientRect(), nr = n.getBoundingClientRect(), cr_ = c.getBoundingClientRect();
+            if (innerWidth <= 700 && hit(lr, nr, 1)) out.cols.push(`${l.textContent}: name over number`);
+            const sp = document.createRange(); sp.selectNodeContents(n.firstChild || n); const tr = sp.getBoundingClientRect(); if (tr.right > cr_.right + 1) out.cols.push(`${l.textContent}: number past its column`); }
+          // 5) small-text contrast against the real background
+          const SMALL = '.kpi .delta > span:first-of-type, .chip i, .menu li a sup, .np-mark, #count, .scope-note, .chart.is-empty .viz .empty, .legend-inline span, .kpi .label, .insights .scope, table.data th';
+          for (const e of document.querySelectorAll(SMALL)) { if (!vis(e) || !e.textContent.trim()) continue; const k = cr(getComputedStyle(e).color, bgOf(e)); if (k < 4.5) out.contrast.push(`${e.className || e.tagName} "${e.textContent.trim().slice(0, 24)}" ${k.toFixed(2)}:1`); }
+          // 6) table headers: real buttons, aria-sort on the th
+          for (const th of document.querySelectorAll('#t thead th')) if (!th.querySelector('button.th-b') || !th.hasAttribute('aria-sort')) out.th.push(th.textContent);
+          // 7) help popover closed = inert + aria-hidden
+          const hp = document.querySelector('#help-pop'); out.help = hp ? { inert: hp.inert, aria: hp.getAttribute('aria-hidden') } : null;
+          // 8) phone header targets ≥ 44 px; sticky first column
+          if (innerWidth <= 700) {
+            for (const b of document.querySelectorAll('.hdr .nav .navbtn, .help > button')) { if (!vis(b)) continue; const r = b.getBoundingClientRect(); if (r.width < 43.5 || r.height < 43.5) out.touch.push(`${b.id || b.className} ${r.width.toFixed(0)}×${r.height.toFixed(0)}`); }
+            const td = document.querySelector('#t tbody td'); out.sticky = td ? getComputedStyle(td).position : 'none';
+          }
+          return out;
+        }"""
+        for vw in (1440, 1024, 390):
+            for scheme in ("light", "dark"):
+                mob = vw <= 700
+                ctx, page, errs = open_page(viewport={"width": vw, "height": 844 if mob else 900}, device_scale_factor=1, is_mobile=mob, has_touch=mob,
+                                            color_scheme=scheme, reduced_motion="reduce")
+                if page.evaluate("document.documentElement.dataset.theme") != scheme:
+                    page.locator("#btn-theme").click(); page.wait_for_timeout(300)
+                page.evaluate("window.__report.revealAll()"); page.wait_for_timeout(250)
+                u = page.evaluate(UX_JS)
+                tag = f"ux {vw}px {scheme}"
+                ok(not u["overlap"], f"{tag}: no overlapping labels inside chart SVGs" + (f" — {u['overlap'][:4]}" if u["overlap"] else ""))
+                ok(not u["outside"], f"{tag}: no axis/text label outside its figure" + (f" — {u['outside'][:4]}" if u["outside"] else ""))
+                ok(not u["barTick"], f"{tag}: bar values clear of the previous-period tick" + (f" — {u['barTick'][:4]}" if u["barTick"] else ""))
+                ok(not u["likert"], f"{tag}: Likert sides fill to the centre axis" + (f" — {u['likert'][:4]}" if u["likert"] else ""))
+                ok(not u["cols"], f"{tag}: column names clear of their numbers, numbers inside the column" + (f" — {u['cols'][:4]}" if u["cols"] else ""))
+                ok(not u["contrast"], f"{tag}: small text ≥ 4.5:1 on its background" + (f" — {u['contrast'][:5]}" if u["contrast"] else ""))
+                ok(not u["svgName"] and not u["figName"], f"{tag}: chart SVGs are named images, figures labelled by their title"
+                   + (f" — svg {u['svgName'][:3]} fig {u['figName'][:3]}" if u["svgName"] or u["figName"] else ""))
+                ok(not u["th"], f"{tag}: sortable headers are buttons with aria-sort" + (f" — {u['th'][:3]}" if u["th"] else ""))
+                ok(u["help"] is None or (u["help"]["inert"] and u["help"]["aria"] == "true"), f"{tag}: closed help popover is inert ({u['help']})")
+                if mob:
+                    ok(not u["touch"], f"{tag}: header/help touch targets ≥ 44 px" + (f" — {u['touch']}" if u["touch"] else ""))
+                    ok(u["sticky"] in ("sticky", "none"), f"{tag}: table first column sticky ({u['sticky']})")
+                if scheme == "light" and vw in (1440, 390):
+                    # keyboard: Enter on a mark filters and focus stays on that mark after the re-render; status announced
+                    st = page.locator("#fb-status")
+                    ok(st.count() == 1 and st.get_attribute("role") == "status" and st.get_attribute("aria-live") == "polite", f"{tag}: filter status line is role=status aria-live=polite")
+                    page.evaluate("window.scrollTo(0, 0)")
+                    note0 = page.evaluate("[...document.querySelectorAll('.scope-note')].some(n => getComputedStyle(n).display !== 'none')")
+                    mark = page.locator(".bars .bar:not(.other), .lk-row button, .np-row button, .th-main").first
+                    if mark.count():
+                        txt = mark.evaluate("e => (e.querySelector('.lbl, .l, b')?.textContent || e.textContent).trim()")
+                        mark.focus(); page.keyboard.press("Enter"); page.wait_for_timeout(650)
+                        foc = page.evaluate("(() => { const a = document.activeElement; return { inFig: !!a.closest('figure.chart'), t: (a.querySelector('.lbl, .l, b')?.textContent || a.textContent).trim() }; })()")
+                        ok(foc["inFig"] and foc["t"] == txt, f"{tag}: keyboard filter keeps focus on '{txt}' after the re-render ({foc['t'][:30]})")
+                        msg = st.inner_text()
+                        ok(txt.split(" ")[0] in msg, f"{tag}: status announces the filter ('{msg[:60]}')")
+                        note1 = page.evaluate("[...document.querySelectorAll('.scope-note')].some(n => getComputedStyle(n).display !== 'none')")
+                        has_note = page.locator(".scope-note").count() > 0
+                        ok(not note0 and (note1 or not has_note), f"{tag}: 'Visão sem filtros' note hidden by default, shown while filtered ({note0} → {note1})")
+                        page.locator("#clear-all").click(); page.wait_for_timeout(650)
+                        note2 = page.evaluate("[...document.querySelectorAll('.scope-note')].some(n => getComputedStyle(n).display !== 'none')")
+                        ok(not note2 and st.inner_text() in ("Filtros removidos.", "Filters removed."), f"{tag}: reset hides the note and announces '{st.inner_text()}'")
+                    dd = page.locator(".dd:not(.daterange)").first
+                    if dd.count():
+                        dd.locator("> button:first-child").click(); page.wait_for_timeout(150)
+                        page.keyboard.press("Escape"); page.wait_for_timeout(100)
+                        ok(page.evaluate("document.activeElement === document.querySelector('.dd:not(.daterange) > button')"), f"{tag}: Escape closes the dropdown and returns focus to its button")
+                    if not mob:
+                        page.evaluate("window.scrollTo(0, 0)")
+                        page.locator("#btn-menu").click(); page.wait_for_timeout(250)
+                        page.locator("#menu-list a").nth(1).click(); page.wait_for_timeout(900)
+                        ok(page.evaluate("(() => { const a = document.activeElement; return !!a && a.matches('h2, summary, h3') && !!a.closest('section, details'); })()"), "ux drawer link moves focus to the section heading")
+                    if vw >= 1100:
+                        # A2: a programmatic jump to the top hides the chapter menu (scrollend / scroll fallback)
+                        page.evaluate("window.scrollTo(0, 0)"); page.wait_for_timeout(500)
+                        ok(page.evaluate("!document.querySelector('#toc').classList.contains('on')"), f"{tag}: chapter menu hidden again after a jump to the top")
+                        page.evaluate("document.querySelector('#sections > section:nth-of-type(2)').scrollIntoView()"); page.wait_for_timeout(500)
+                        ok(page.evaluate("document.querySelector('#toc').classList.contains('on')"), f"{tag}: chapter menu shown after a jump straight into a section")
+                ok(not errs, f"{tag}: no console/page errors" + (f" — {errs[:3]}" if errs else ""))
+                ctx.close()
 
         # ---------------- mobile
         ctx, page, errs = open_page(viewport={"width": 390, "height": 844}, device_scale_factor=3, is_mobile=True, has_touch=True, color_scheme="light", reduced_motion="reduce")
