@@ -10,7 +10,7 @@ CLI
 
 Python
     import importlib.util, os
-    kit = os.environ.get("RELATORIO_KIT", "caminho/para/relatorio-html")
+    kit = os.environ.get("INTERACTIVE_REPORT_KIT") or os.environ.get("RELATORIO_KIT", "path/to/interactive-report")
     spec = importlib.util.spec_from_file_location("rp", os.path.join(kit, "profile.py"))
     rp = importlib.util.module_from_spec(spec); spec.loader.exec_module(rp)
     df = rp.load_any("data.csv"); df, notes = rp.clean(df); summary = rp.profile(df, notes)

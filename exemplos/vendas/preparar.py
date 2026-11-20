@@ -19,7 +19,7 @@ from pathlib import Path
 import pandas as pd
 
 HERE = Path(__file__).resolve().parent
-KIT = Path(os.environ.get("RELATORIO_KIT") or HERE.parents[1])   # repo root (override with $RELATORIO_KIT)
+KIT = Path(os.environ.get("INTERACTIVE_REPORT_KIT") or os.environ.get("RELATORIO_KIT") or HERE.parents[1])   # repo root
 
 
 def _ensure(csv: Path):

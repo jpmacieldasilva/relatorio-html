@@ -1,248 +1,404 @@
-# relatorio-html
+<div align="center">
 
-**Relatórios editoriais e interativos em um único arquivo HTML, a partir de qualquer planilha ou base de dados.** É uma alternativa ao Looker / Data Studio para quando você quer contar uma história com os dados, e não montar mais um painel.
+# interactive-report
 
-Você descreve o relatório em Python (um *spec*). O kit valida o spec, embute os dados, as bibliotecas e as fontes, e gera um `.html` que abre offline com dois cliques. Depois um teste automático (Playwright) confere se tudo renderiza e responde aos filtros.
+**Turn any spreadsheet or dataset into an editorial, interactive, single-file HTML report.**  
+An Agent Skill & Python toolkit for telling a clear story with data — not building yet another dashboard.
 
-![Relatório de vendas no tema padrão (Neutro): título, filtros e KPIs em cartões](docs/vendas-hero-claro.png)
+[English](README.md) · [Português (BR)](README.pt-BR.md)
 
-<p>
-  <img src="docs/vendas-hero-escuro.png" width="64%" alt="Modo escuro">
-  <img src="docs/vendas-mobile.png" width="22%" alt="Celular">
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Agent Skill](https://img.shields.io/badge/Agent_Skill-SKILL.md-1F4E79.svg)](SKILL.md)
+[![Single-File HTML](https://img.shields.io/badge/Output-Single--File_HTML-2E7D32.svg)](#what-it-does)
+[![Playwright QA](https://img.shields.io/badge/QA-Playwright_Verified-45ba4b.svg)](#what-it-does)
+
+</div>
+
+---
+
+> **Why this exists:** Dashboards (Looker, Power BI, Data Studio) are built for monitoring, not for explaining a finding. **interactive-report** pairs an AI coding agent (`SKILL.md`) with a deterministic Python + d3 / Observable Plot kit to produce a **self-contained `.html` file** that opens offline with a double click, cross-filters every chart, and reads like an edited publication (FT / The Economist / Our World in Data).
+
+<!--
+  =============================================================================
+  DEMO SLOT 1 — HERO SHOWCASE (PRIMARY VISUAL)
+  Recommended for the upcoming visual refresh:
+  - 16:10 or 16:9 high-DPI hero screenshot (1440×900) in light mode, or an
+    annotated GIF/MP4 showing cross-filtering + KPI count-up + theme switch.
+  - Current asset: docs/vendas-hero-claro.png
+  =============================================================================
+-->
+<p align="center">
+  <img src="docs/vendas-hero-claro.png" width="100%" alt="Sales report in the default Neutro theme: headline, filter bar, and KPI cards">
 </p>
 
-## O que faz
-
-- **Visualização editorial.** O título afirma o achado. Os destaques são calculados, os KPIs vêm com variação e minigráfico, e cada seção responde a uma pergunta. Seguem as regras de Tufte, Few e Cleveland: rótulos diretos, barras a partir do zero, nada de pizza com muitas fatias, nada de 3D, nada de dois eixos.
-- **Filtro cruzado em tudo.** Clicar numa barra, segmento, ponto, célula ou tema filtra o relatório inteiro (Shift soma à seleção). As instruções de uso ficam num lugar só, o botão "Como filtrar" (?) na barra de filtros, sem repetir em cada gráfico. Há também presets de datas, intervalo livre, dropdowns com busca (no desktop o valor escolhido aparece dentro do próprio dropdown, com um × para limpar; no celular, como chip), um contador na unidade do relatório ("R$ 3,6 mi de R$ 6,2 mi") e uma tabela com busca, ordenação e exportação CSV.
-- **Texto fixo, números vivos.** O resumo, os destaques e os títulos com números são calculados em Python para a visão padrão e nunca são reescritos no navegador. Com um filtro ativo, aparece ao lado deles uma nota discreta "Visão sem filtros"; os números e os gráficos seguem o filtro.
-- **Micro-interações discretas.** Título e cartões de KPI entram com um fade curto. As barras crescem quando entram na tela, os números dos KPIs contam até o valor e se animam a cada filtro, e as linhas se desenham. O cabeçalho se esconde ao rolar e o sumário lateral marca o capítulo ativo. A velocidade é configurável, e tudo respeita `prefers-reduced-motion`.
-- **Pesquisas de satisfação (CSAT, CES, NPS)** com estatística honesta:
-  - o kit detecta as colunas de nota pelo nome e pela escala;
-  - todo número traz intervalo de confiança de 95% e n (Wilson, variância do NPS, t);
-  - diferenças passam por teste z com correção de Holm, e o texto só diz "subiu" ou "caiu" quando o teste confirma;
-  - grupos pequenos aparecem sempre, marcados como *amostra pequena*;
-  - há análise de impacto (drivers), taxa de resposta e temas dos comentários agrupados offline, com dados pessoais mascarados.
-- **Temas configuráveis.** Fontes (Google Fonts embutidas, arquivo local ou fonte do sistema), cor principal, paleta de dados, cantos, fios, espaçamento, escala tipográfica, hero, movimento e logo. Dois layouts (`clean` e `blocks`) e cinco presets. O build checa o contraste (WCAG, 4,5:1).
-- **Regras de leitura consistentes.**
-  - Uma granularidade de tempo para o relatório inteiro (`time_grain`, automática pelo intervalo dos dados ou definida por você). Ela vale para todos os gráficos de tempo, KPIs e a tabela, e o build falha se um gráfico tentar outra sem `grainOverride`.
-  - A pergunta da pesquisa aparece **completa, exatamente como está no dado**, sem resumo nem reticências.
-  - O texto gerado é literal, sem analogias nem metáforas ("caiu 3 pontos", não "esfriou").
-  - Gráficos, seções e KPIs sem dados são omitidos no build, com aviso. No navegador, um gráfico esvaziado pelo filtro vira uma linha discreta.
-  - A metodologia fica no fim, recolhida, e abre com um clique (no PDF sai aberta).
-- **Um arquivo só.** d3 e Observable Plot vão embutidos, assim como as fontes e o logo. Tem modo claro e escuro, layout responsivo e um PDF pronto para impressão.
-- **Acessível.** Quem filtra pelo teclado continua no mesmo item depois do redesenho, uma linha `aria-live` anuncia o filtro, Esc devolve o foco ao dropdown, cada gráfico é uma imagem com nome, os cabeçalhos da tabela são botões com `aria-sort`, textos pequenos passam de 4,5:1 (também no escuro e sobre o hero colorido) e os botões do celular têm 44 px.
-- **QA automático.** `verify.py` abre o relatório no Chromium e checa erros no console, se cada gráfico renderizou, cliques e filtros, a tabela, o modo escuro e a ausência de rolagem lateral no celular. Em 1440, 1024 e 390 px, claro e escuro, também confere rótulos sobrepostos ou fora do gráfico, contraste dos textos pequenos, foco e anúncios depois de filtrar. Também tira os screenshots.
-
-<p>
-  <img src="docs/vendas-filtro-visao-sem-filtros.png" width="62%" alt="Filtro ativo: o valor aparece no dropdown e o resumo ganha a nota Visão sem filtros">
-  <img src="docs/vendas-mobile-colunas.png" width="30%" alt="Colunas no celular: o nome da região fica acima do valor">
+<!--
+  =============================================================================
+  DEMO SLOT 2 — DARK MODE + MOBILE RESPONSIVE SIDE-BY-SIDE
+  Recommended for the upcoming visual refresh:
+  - Paired dark-mode desktop capture + 390px mobile capture on a clean backdrop.
+  - Current assets: docs/vendas-hero-escuro.png, docs/vendas-mobile.png
+  =============================================================================
+-->
+<p align="center">
+  <img src="docs/vendas-hero-escuro.png" width="68%" alt="Dark mode desktop view">
+  &nbsp;
+  <img src="docs/vendas-mobile.png" width="23%" alt="Responsive mobile view">
 </p>
 
-<p>
-  <img src="docs/cx-ajuda-e-pergunta.png" width="49%" alt="Ajuda de interação única na barra de filtros e a pergunta da pesquisa completa sob o título do gráfico">
-  <img src="docs/metodologia-recolhida.png" width="49%" alt="Metodologia no fim do relatório, recolhida por padrão">
-</p>
+---
 
-### Pesquisas de satisfação
+## Table of Contents
 
-![Relatório de pesquisa pós-atendimento (dados fictícios)](docs/cx-hero.png)
+- [Install as an AI Agent Skill](#install-as-an-ai-agent-skill)
+- [How It Works](#how-it-works)
+- [What It Does](#what-it-does)
+- [Interactive Demo & UX Details](#interactive-demo--ux-details)
+- [CX & Survey Analytics (CSAT, CES, NPS)](#cx--survey-analytics-csat-ces-nps)
+- [Themes & Customization](#themes--customization)
+- [Layout Grid](#layout-grid)
+- [Standalone Quick Start (CLI / Python)](#standalone-quick-start-cli--python)
+- [Project Structure](#project-structure)
+- [Limitations & Privacy](#limitations--privacy)
+- [License](#license)
 
-<p>
-  <img src="docs/cx-nps-por-canal.png" width="49%" alt="NPS por canal, com teste de significância">
-  <img src="docs/cx-csat-por-uf-ic.png" width="40%" alt="CSAT por UF com intervalo de confiança; UFs pequenas vazadas">
-</p>
+---
 
-![Distribuição das notas de CSAT por canal](docs/cx-likert-csat.png)
+## Install as an AI Agent Skill
 
-<img src="docs/cx-temas-comentarios.png" width="55%" alt="Temas dos comentários abertos">
+This repository is a drop-in **Agent Skill** following the open [`SKILL.md`](SKILL.md) standard (compatible with **Claude Code**, **Cursor**, **Codex**, **Antigravity**, and other skill-enabled coding agents).
 
-### Temas
+### Option 1 — via `skills` CLI (recommended)
 
-O padrão é o **Neutro**: fundo off-white, tinta em escala de cinzas e um azul profundo como cor principal. A paleta de dados é segura para daltonismo. As fontes são Inter + IBM Plex Mono. O cabeçalho é simples, os KPIs vêm em cartões e o movimento é discreto. Para mudar, basta escolher outro preset ou sobrescrever qualquer valor.
+```bash
+npx skills add jpmacieldasilva/interactive-report
+```
 
-| Preset | Layout | Estilo |
-|---|---|---|
-| `neutro` (padrão) | `clean` | Neutro e calmo: cinzas, azul `#1F4E79`, Inter, cartões de KPI |
-| `corporativo` | `blocks` | Herói e faixa de KPIs em azul-marinho, IBM Plex |
-| `jornal` | `clean` | Títulos serifados (Newsreader), fundo creme, vermelho como cor principal |
-| `noturno` | `blocks` | Escuro, blocos verde-limão, Space Grotesk |
-| `destaque` | `blocks` | Herói em amarelo-sol, dados em azul-petróleo, Archivo; para apresentações |
+### Option 2 — Clone directly into your agent's skills folder
 
-O mesmo relatório de vendas no preset `corporativo`:
+```bash
+# Claude Code
+git clone https://github.com/jpmacieldasilva/interactive-report.git ~/.claude/skills/interactive-report
 
-![Tema corporativo](docs/tema-corporativo-hero.png)
+# Cursor
+git clone https://github.com/jpmacieldasilva/interactive-report.git ~/.cursor/skills/interactive-report
+```
 
-## Como funciona
+Then install the Python dependencies once:
 
-1. **Contextualização (passo 0, obrigatório).** Antes de gerar qualquer coisa, o agente pergunta só o que não dá para inferir:
-   - o **objetivo**, isto é, que decisão o relatório vai apoiar;
-   - o **público** (diretoria, time, cliente) e o nível técnico;
-   - os **pontos-chave** ou hipóteses que a pessoa quer ver;
-   - o **período** e o recorte.
+```bash
+pip install -r requirements.txt
+python3 -m playwright install chromium
+```
 
-   Em seguida, roda o perfil dos dados e devolve uma **proposta curta** para aprovação: filtros (colunas do cross-filter), linguagem e tom, seções na ordem de leitura (com a pergunta que cada uma responde e o gráfico previsto), KPIs, métricas de CX quando for pesquisa (CSAT, CES, NPS), tema e suposições. Nada é construído antes do "ok". Quem preferir pode dizer "segue", e o agente usa a proposta e registra as suposições.
-2. **Modelagem.** As respostas ficam em `spec["contexto"]` e orientam o resto. O título responde ao objetivo, o texto segue o público e cada ponto-chave vira um destaque ou uma seção. Com `"exibir": true`, objetivo, público e pontos-chave aparecem numa coluna discreta no rodapé.
-3. **Narrativa e build.** Os destaques são calculados em pandas e o `build.py` gera um único HTML.
-4. **Verificação.** O `verify.py` testa o relatório num Chromium headless e tira os screenshots antes da entrega.
+### Triggering the skill
+
+Point your agent to any CSV, XLSX, JSON, Parquet, or SQLite file and ask:
+
+> *"Build an interactive HTML report from `sales_2025.xlsx` for the commercial leadership team."*
+
+The agent will automatically run **Step 0 (Context & Proposal)** before writing any HTML.
+
+---
+
+## How It Works
+
+```text
+  Your Data (CSV / XLSX / Parquet / SQLite)
+        │
+        ▼
+  0. Context & Proposal ──► Asks goal, audience, key questions → proposes filters, sections & theme → waits for approval
+        │
+        ▼
+  1. Profile & Clean    ──► profile.py inspects schema, dates, nulls, outliers & logs conservative cleaning
+        │
+        ▼
+  2. Model & Narrative  ──► pandas pre-aggregates fact table & computes exact numbers/highlights (zero hallucinated stats)
+        │
+        ▼
+  3. Build Single HTML  ──► build.py validates spec, checks WCAG contrast, inlines d3 + Plot + fonts + data → report.html
+        │
+        ▼
+  4. Automated QA       ──► verify.py opens Chromium (1440 / 1280 / 1024 / 390 px, light & dark), tests clicks/filters & captures screenshots
+```
+
+### Step 0 — Mandatory Context Pass
+
+Before building anything, the agent asks only what cannot be inferred from the data:
+- **Goal**: what decision the report supports;
+- **Audience**: who reads it (executives, ops team, external client) and their technical level;
+- **Key points**: hypotheses or specific questions to answer;
+- **Period & scope**: time window, comparison baseline, and business rules.
+
+It profiles the dataset and presents a short **proposal** (filters, language & tone, section order with the question each answers, KPIs, CX mapping for surveys, theme, and assumptions). Nothing is built until you approve (or say *"go ahead"* to accept the defaults).
 
 ```python
 spec["contexto"] = {
-    "objetivo": "Decidir onde investir e onde cortar desconto no próximo trimestre",
-    "publico": "Diretoria comercial; leitura rápida, pouco técnica",
-    "pontos_chave": ["Crescimento por região", "Margem perdida com desconto"],
-    "linguagem": {"idioma": "pt-BR", "tom": "direto", "nivel": "leigo"},
-    "periodo": "Últimos 12 meses vs. os 12 anteriores",
-    "suposicoes": ["Pedidos cancelados ficam fora"],
-    "exibir": False,   # True = coluna "Sobre este relatório" no rodapé
+    "objetivo": "Decide where to invest and where to cut discounts next quarter",
+    "publico": "Commercial leadership; fast, non-technical read",
+    "pontos_chave": ["Growth by region", "Margin lost to discounting"],
+    "linguagem": {"idioma": "en-US", "tom": "direct", "nivel": "executive"},
+    "periodo": "Last 12 months vs. previous 12 months",
+    "suposicoes": ["Cancelled orders are excluded"],
+    "exibir": False,   # True adds a discreet "About this report" column to the footer
 }
 ```
 
-## Grid de layout
+---
 
-Todo o relatório segue um grid só, com duas faixas, e cada bloco ocupa **100 %, 50 % ou 33 %** (12, 6 ou 4 colunas, gutter fixo de 32 px):
+## What It Does
 
-- **Cabeçalho em largura total**: título, metadados, barra de filtros (também quando fica presa no topo), resumo, KPIs e destaques vão de uma margem à outra (1376 px numa tela de 1440). O resumo mantém a medida de leitura. KPIs e destaques ficam nessa faixa porque o menu está oculto ali: um trilho vazio ao lado dos números ficaria como um buraco.
-- **Conteúdo**: seções, gráficos, notas, tabela e metodologia ficam numa coluna de largura máxima fixa (1128 px a 1440), com um trilho reservado à esquerda para o menu de capítulos.
-- **O menu aparece com o scroll**: fica oculto no topo e entra com fade e slide quando a primeira seção chega até ele (IntersectionObserver). Some de novo ao voltar ao topo e nunca cobre o cabeçalho nem os filtros. O trilho já está reservado, então o conteúdo não pula. Com movimento reduzido não há animação.
+- **Editorial data visualization.** Headlines state the finding. Highlights are computed in Python, KPIs include deltas and sparklines, and each section answers one question. Built around Tufte, Few, and Cleveland principles: direct labels, zero-baseline bars, no cluttered pies, no 3D, no dual axes.
+- **Full cross-filtering.** Clicking any bar, segment, dot, heatmap cell, or comment theme filters the entire report (`Shift` + click adds to the selection). Includes date presets, custom date ranges, searchable dropdowns (selected value shown inline on desktop with a clear `×`, and as chips on mobile), a live scope counter in the report's unit, and a searchable/sortable table with CSV export.
+- **Static prose, live numbers.** Summaries, highlights, and numeric headlines are computed in Python for the default view and never rewritten by client-side heuristics. When a filter is active, a discreet *"Unfiltered view"* badge appears next to static prose while KPIs and charts update live.
+- **Subtle micro-interactions.** Short entrance fades, growing bars on scroll, animated KPI count-ups on filter changes, collapsible sticky header, and a scroll-synced chapter menu. Configurable speed with full `prefers-reduced-motion` support.
+- **Built-in reading rules.**
+  - **Single time grain (`time_grain`)** enforced across all time charts, KPIs, and tables (the build fails on mismatches unless `grainOverride` is set).
+  - **Verbatim survey questions** — always displayed in full, never truncated with ellipses.
+  - **Literal copy** — no metaphors or editorialized fluff.
+  - **Empty-state handling** — empty charts/KPIs are omitted at build time with a warning; filter-emptied charts collapse cleanly in the browser.
+  - **Honest methodology** — collapsed at the end of the report by default, expanded automatically in print/PDF.
+- **One portable file.** d3, Observable Plot, fonts (WOFF2), and logo are inlined. Works completely offline with light/dark mode, responsive layout, and print-ready PDF CSS.
+- **Accessible by default.** Keyboard filtering preserves focus after redraws, `aria-live` announces filter changes, `Esc` returns focus to dropdowns, charts expose accessible labels, sortable table headers use `aria-sort`, text contrast is validated against WCAG 4.5:1 (light, dark, and colored heroes), and mobile tap targets are ≥ 44 px.
+- **Automated QA (`verify.py`).** Headless Chromium verifies zero console errors, chart rendering, cross-filter clicks, table search/sort, dark mode, no horizontal overflow on mobile, label overlap/clipping, contrast, focus/announcements, and captures screenshots across `1440`, `1280`, `1024`, and `390` px.
 
-```python
-{"type": "bars", "dim": "canal", "measure": "receita", "width": "half"}   # full (padrão) | half | third
-```
+---
 
-- Cada linha tem uma largura só: 1 full, 2 halves ou 3 thirds. Se sobrar um gráfico sozinho, o `build.py` avisa e o alarga (um half sozinho vira full; 2 thirds viram 2 halves). Qualquer outro valor em `width` faz o build falhar.
-- Gráficos densos (heatmap, small multiples, tabela, séries longas) ficam em full. `half` serve para comparar dois gráficos; `third`, para três visões curtas e paralelas.
-- Gráficos lado a lado têm títulos com a mesma altura, então os eixos começam na mesma linha.
-- No tablet, third vira half e o menu vai para a gaveta do cabeçalho. No celular, tudo fica em full (os KPIs ficam em pares).
-- As medidas vêm do tema (`layout.grid`: `maxWidth`, `rail`, `railGap`, `gutter`, `pad`). O `verify.py` confere o alinhamento em 1440, 1280, 1024 e 390 px, a largura total do cabeçalho e dos filtros e o menu oculto no topo e visível depois do scroll.
+## Interactive Demo & UX Details
 
-<p>
-  <img src="docs/vendas-topo.png" width="49%" alt="Topo: cabeçalho, filtros, KPIs e destaques em largura total, sem menu lateral">
-  <img src="docs/vendas-rolado-menu.png" width="49%" alt="Página rolada: filtros presos no topo em largura total e o menu de capítulos no trilho">
+<!--
+  =============================================================================
+  DEMO SLOT 3 — INTERACTIVE CROSS-FILTERING & UX DETAILS
+  Recommended for the upcoming visual refresh:
+  - Left: Cross-filter active state (or short GIF clicking a bar → KPIs & charts updating).
+  - Right: Mobile chart layout with direct labels above bars.
+  - Current assets: docs/vendas-filtro-visao-sem-filtros.png, docs/vendas-mobile-colunas.png
+  =============================================================================
+-->
+<p align="center">
+  <img src="docs/vendas-filtro-visao-sem-filtros.png" width="64%" alt="Active filter state: selected value in dropdown and 'Unfiltered view' note on static summary">
+  &nbsp;
+  <img src="docs/vendas-mobile-colunas.png" width="29%" alt="Mobile bar chart: direct labels placed cleanly above values">
 </p>
 
-![Grid de 12 colunas e trilho do menu sobre a seção Volume do exemplo de pesquisa](docs/grid-12-colunas.png)
+<!--
+  =============================================================================
+  DEMO SLOT 4 — READING RULES (SINGLE HELP POPOVER + COLLAPSED METHODOLOGY)
+  Recommended for the upcoming visual refresh:
+  - Left: Single "How to filter" (?) popover + verbatim survey question under chart title.
+  - Right: Collapsed methodology block at the bottom of the report.
+  - Current assets: docs/cx-ajuda-e-pergunta.png, docs/metodologia-recolhida.png
+  =============================================================================
+-->
+<p align="center">
+  <img src="docs/cx-ajuda-e-pergunta.png" width="48%" alt="Single interaction help popover in filter bar and full survey question under chart title">
+  &nbsp;
+  <img src="docs/metodologia-recolhida.png" width="48%" alt="Methodology block at the bottom of the report, collapsed by default">
+</p>
 
-## Começando
+---
 
-```bash
-git clone https://github.com/jpmacieldasilva/relatorio-html.git
-cd relatorio-html
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python -m playwright install chromium
+## CX & Survey Analytics (CSAT, CES, NPS)
 
-# exemplos (os CSVs fictícios são gerados na primeira execução)
-python exemplos/vendas/preparar.py               # → exemplos/vendas/relatorio.html
-python exemplos/vendas/preparar.py corporativo   # → relatorio-corporativo.html
-python exemplos/cx/preparar.py                   # → exemplos/cx/relatorio.html
-python verify.py exemplos/cx/relatorio.html --out /tmp/capturas
-```
+The built-in `cx.py` module turns raw survey exports into statistically sound CX reports:
 
-Os HTMLs já gerados estão em `exemplos/`. Basta abrir no navegador.
+- **Automatic detection** of CSAT, CES, NPS, date, comment, and PII columns by name and scale;
+- **95% confidence intervals and `n`** on every metric (Wilson for proportions, NPS variance, *t*-interval for CES mean);
+- **Significance testing** via two-sided *z*-tests with Holm correction — copy only says *"up"* or *"down"* when statistically significant;
+- **Small samples always shown** and explicitly flagged (*small sample*) rather than silently hidden;
+- **Driver analysis**, response-rate tracking, and **offline comment themes** with heuristic PII masking (full raw comments are never embedded in the HTML).
 
-### Com os seus dados
+<!--
+  =============================================================================
+  DEMO SLOT 5 — CX SURVEY HERO & STATISTICAL CHARTS
+  Recommended for the upcoming visual refresh:
+  - Full-width CX report hero + 2x2 grid of NPS significance, CSAT with CI,
+    Likert distribution, and open-comment themes.
+  - Current assets: docs/cx-hero.png, docs/cx-nps-por-canal.png,
+    docs/cx-csat-por-uf-ic.png, docs/cx-likert-csat.png, docs/cx-temas-comentarios.png
+  =============================================================================
+-->
+<p align="center">
+  <img src="docs/cx-hero.png" width="100%" alt="Post-service CX survey report (fictional ISP dataset)">
+</p>
 
-0. **Contexto.** Defina objetivo, público, pontos-chave e linguagem, e guarde em `spec["contexto"]` (veja *Como funciona*).
-1. **Perfil.** `python profile.py dados.xlsx --out perfil.json --clean-out limpo.parquet` lê CSV, XLSX, JSON, Parquet e SQLite e faz uma limpeza conservadora. O resultado mostra papéis das colunas, nulos, datas, outliers e alertas.
-2. **Spec.** Em Python, monte as medidas (taxas são sempre razão de somas), pré-agregue, calcule os destaques com pandas e escreva o spec. Copie a estrutura de `exemplos/vendas/preparar.py`. Para pesquisas, use `exemplos/cx/preparar.py` e `cx.py`.
-3. **Build.** `build.build(spec, "relatorio.html", theme="jornal")`, ou pela linha de comando: `python build.py spec.json relatorio.html --theme corporativo`.
-4. **Verificação.** `python verify.py relatorio.html --pdf`. Não entregue com falha.
+<p align="center">
+  <img src="docs/cx-nps-por-canal.png" width="51%" alt="NPS by channel with significance markers">
+  &nbsp;
+  <img src="docs/cx-csat-por-uf-ic.png" width="42%" alt="CSAT by state with 95% confidence intervals and small-sample indicators">
+</p>
 
-Para importar os módulos por caminho (o nome `profile` colide com a stdlib):
+<p align="center">
+  <img src="docs/cx-likert-csat.png" width="100%" alt="CSAT score distribution (Likert) by channel">
+</p>
 
-```python
-import importlib.util, os, sys
-KIT = os.environ.get("RELATORIO_KIT", "/caminho/para/relatorio-html")
-def kit(name):
-    s = importlib.util.spec_from_file_location("kit_" + name, os.path.join(KIT, f"{name}.py"))
-    m = importlib.util.module_from_spec(s); sys.modules["kit_" + name] = m; s.loader.exec_module(m); return m
-rp, rb, cx = kit("profile"), kit("build"), kit("cx")
-```
+<p align="center">
+  <img src="docs/cx-temas-comentarios.png" width="60%" alt="Offline open-comment themes with masked quotes">
+</p>
 
-## Como skill de agente de IA
+---
 
-A pasta inteira é uma *skill* no formato `SKILL.md` (Cursor, Claude Code e afins). Copie ou clone o repositório para a pasta de skills do agente, por exemplo `~/.cursor/skills/relatorio-html/` ou `~/.claude/skills/relatorio-html/`. O agente passa a:
+## Themes & Customization
 
-1. contextualizar: perguntar objetivo, público, pontos-chave e período, perfilar os dados e propor filtros, linguagem, seções, KPIs (e o mapeamento das colunas quando for pesquisa) e tema. Depois, esperar a aprovação;
-2. guardar o que foi aprovado em `spec["contexto"]`;
-3. modelar e calcular a narrativa em pandas, sem inventar números nem direções;
-4. gerar o relatório;
-5. rodar `verify.py` e revisar os screenshots antes de entregar.
+Every visual token is controlled by a JSON theme (`TEMA.md`): layout (`clean` or `blocks`), fonts (Google Fonts inlined as WOFF2, local files, or system fonts), light/dark colors, colorblind-safe data palettes, border radius, rules, spacing, typography scale, hero style, motion speed, and brand logo. `build.py` validates WCAG contrast at build time.
 
-Os caminhos no `SKILL.md` são relativos à pasta da skill. `RELATORIO_KIT` permite apontar para outra localização.
+| Preset | Layout | Visual Style |
+|---|---|---|
+| `neutro` *(default)* | `clean` | Calm & neutral: off-white canvas, grey ink scale, deep blue `#1F4E79`, Inter + IBM Plex Mono, KPI cards |
+| `corporativo` | `blocks` | Navy-blue hero and KPI band, IBM Plex |
+| `jornal` | `clean` | Editorial serif headings (Newsreader), warm cream canvas, crimson accent |
+| `noturno` | `blocks` | Dark canvas, lime-green blocks, Space Grotesk |
+| `destaque` | `blocks` | Sun-yellow hero, teal data palette, Archivo — built for presentations |
 
-## Configurando o tema
+<!--
+  =============================================================================
+  DEMO SLOT 6 — THEME GALLERY
+  Recommended for the upcoming visual refresh:
+  - Side-by-side or 2x2 collage comparing neutro, corporativo, jornal, noturno,
+    and destaque presets on the same dataset.
+  - Current asset: docs/tema-corporativo-hero.png
+  =============================================================================
+-->
+<p align="center">
+  <img src="docs/tema-corporativo-hero.png" width="100%" alt="Same sales report rendered with the corporativo theme preset">
+</p>
 
-Pelo spec (`spec["theme"]`) ou por `--theme`, você passa um preset, um arquivo JSON ou ajustes inline mesclados sobre o padrão:
+Override any theme property inline in your spec or pass `--theme`:
 
 ```python
 spec["theme"] = {
-    "primary": "#0B5FFF",          # blocos do hero e da faixa de KPIs
-    "accent":  "#7FB2FF",          # cor dos dados
-    "font": "Inter", "heading": "Fraunces",   # Google Fonts → embutidas como woff2
-    "logo": "logo.svg", "brand": "Acme",
-    "hero": {"style": "plain"},    # sem bloco de cor
+    "primary": "#0B5FFF",
+    "accent":  "#7FB2FF",
+    "font": "Inter",
+    "heading": "Fraunces",       # Google Fonts → automatically inlined as woff2
+    "logo": "logo.svg",
+    "brand": "Acme",
+    "hero": {"style": "plain"},
     "motion": {"speed": 0.8},
 }
 ```
 
-Um tema completo (`temas/neutro.json`) define `layout` (`clean` ou `blocks`), `fonts`, `colors` (light/dark), `palette` (categórica, sequencial, divergente, positivo/negativo), `shape`, `space`, `type`, `hero`, `motion` e `brand`. Veja [`TEMA.md`](TEMA.md). Para testar um tema sem gerar relatório: `python tema.py jornal`.
+Test a theme configuration without building a full report:
 
-## Limitações
-
-- **Todos os dados vão para o navegador.** Agregue ou remova dados pessoais e segredos antes. Nas pesquisas, o texto completo dos comentários não é embutido.
-- **Volume.** O filtro no navegador é confortável até cerca de 150–200 mil linhas na tabela fato. Acima disso, agregue mais (por exemplo, dia → semana).
-- **Destaques.** Os textos de destaque são estáticos e descrevem a visão padrão; KPIs e gráficos são vivos.
-- **Temas dos comentários** são aproximados: um tema por comentário, nomes a partir dos termos mais característicos. Revise e renomeie.
-- **Mascaramento de dados pessoais** é heurístico. Revise as citações antes de compartilhar.
-- **Drivers** mostram associação, não causa. Os testes assumem respostas independentes.
-- **Fontes do Google** precisam de internet só no primeiro build (ficam em cache em `vendor/fonts-cache/`).
-
-## Licenças
-
-Código sob [MIT](LICENSE) © 2026 João Paulo da Silva. d3 e Observable Plot (ISC) e as fontes Geist, IBM Plex, Inter, JetBrains Mono, Montserrat, Newsreader e Space Grotesk (SIL OFL 1.1) vão embutidos com suas próprias licenças. Veja [NOTICE.md](NOTICE.md). Os dados de exemplo são **fictícios**.
+```bash
+python tema.py jornal
+```
 
 ---
 
-## English
+## Layout Grid
 
-**relatorio-html** turns any dataset (CSV, XLSX, JSON, Parquet, SQLite) into an editorial, interactive, **single-file HTML report**:
+Reports follow a unified two-zone, **12-column grid** (32 px fixed gutter) where every chart occupies **100% (`full`), 50% (`half`), or 33% (`third`)**:
 
-- story-first layout and cross-filtering charts (d3 + Observable Plot);
-- micro-interactions, light/dark mode, print/PDF;
-- a searchable table with CSV export;
-- automated Playwright QA.
+- **Full-width header zone**: title, metadata, sticky filter bar, summary, KPIs, and highlights span the full page width.
+- **Content zone + reserved chapter rail**: sections, charts, table, and methodology sit in a fixed max-width column next to a reserved left rail where the chapter menu fades in as you scroll past the header (zero layout shift).
+- **Row integrity**: every row uses a single width (`1 full`, `2 halves`, or `3 thirds`). Incomplete rows are widened automatically with a build warning, side-by-side chart titles share height so axes align, and `verify.py` audits alignment at `1440`, `1280`, `1024`, and `390` px.
 
-It includes a **survey module** for CSAT, CES and NPS:
+```python
+{"type": "bars", "dim": "canal", "measure": "receita", "width": "half"}  # full (default) | half | third
+```
 
-- automatic column detection;
-- 95% confidence intervals on every number;
-- z-tests with Holm correction, so wording is derived from significance;
-- small groups always shown and flagged;
-- driver analysis, response rate, and offline comment themes with PII masking.
+<!--
+  =============================================================================
+  DEMO SLOT 7 — SCROLL CHOREOGRAPHY & 12-COLUMN LAYOUT GRID
+  Recommended for the upcoming visual refresh:
+  - Top vs. scrolled sticky-filter + chapter rail comparison, plus the 12-column
+    grid overlay.
+  - Current assets: docs/vendas-topo.png, docs/vendas-rolado-menu.png,
+    docs/grid-12-colunas.png
+  =============================================================================
+-->
+<p align="center">
+  <img src="docs/vendas-topo.png" width="48%" alt="Top of page: full-width header, filters, KPIs, and highlights">
+  &nbsp;
+  <img src="docs/vendas-rolado-menu.png" width="48%" alt="Scrolled view: sticky full-width filter bar and chapter menu in the left rail">
+</p>
 
-The look is driven by **JSON themes**: layout (`clean` or `blocks`), fonts (Google Fonts inlined, local files or system), colors, palette, radius, spacing, type scale, hero, motion and logo. Contrast is checked at build time.
+<p align="center">
+  <img src="docs/grid-12-colunas.png" width="100%" alt="12-column grid and chapter rail overlay">
+</p>
 
-The default theme, **Neutro**, is calm and neutral:
+---
 
-- off-white page, grey ink scale and one deep-blue primary;
-- colorblind-safe data palette;
-- Inter + IBM Plex Mono;
-- plain header, KPI cards and subtle fade/grow motion.
+## Standalone Quick Start (CLI / Python)
 
-Other presets: `corporativo` (navy block hero), `jornal` (serif, newspaper), `noturno` (dark, lime) and `destaque` (sun-yellow blocks, for presentations).
+You can also run the toolkit directly without an AI agent:
 
-How it works: **step 0 is a mandatory context pass.** The agent asks only what it can't infer: the goal (which decision the report supports), the audience and its technical level, the key points or hypotheses, and the period. It then profiles the data and sends a short proposal: filters, language and tone, sections (each with its question and chart), KPIs, CX metrics for surveys, theme and assumptions. It builds nothing until the user approves; "go ahead" skips the round and records the assumptions. The answers live in `spec["contexto"]` and steer the headline, the copy and the section order. `"exibir": true` shows them in a discreet footer column. After that come the pandas narrative, `build.py` and `verify.py`.
+```bash
+git clone https://github.com/jpmacieldasilva/interactive-report.git
+cd interactive-report
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python -m playwright install chromium
 
-Reading rules built in:
+# Run the included examples (fictional CSVs are generated on first run)
+python exemplos/vendas/preparar.py               # → exemplos/vendas/relatorio.html
+python exemplos/vendas/preparar.py corporativo   # → exemplos/vendas/relatorio-corporativo.html
+python exemplos/cx/preparar.py                   # → exemplos/cx/relatorio.html
 
-- one time grain for the whole report (`time_grain`, auto from the data span or set by you), so every time chart, KPI and the table use it, and the build fails on a mismatched chart unless it has `grainOverride`;
-- survey questions are shown verbatim and in full (never shortened or cut with "…");
-- generated copy is literal, with no analogies or metaphors;
-- charts, sections and KPIs without data are omitted at build time (with a warning), and a chart emptied by a filter collapses to one quiet line;
-- interaction help lives in one "Como filtrar" (?) popover instead of on every chart;
-- the methodology is the last block, collapsed by default and expanded in print.
-- one layout grid: the header zone (hero, filter bar, summary, KPIs, highlights) spans the whole page width; sections sit in a fixed-width content column next to a reserved rail where the chapter menu fades in once you scroll past the header; 12 columns with a fixed gutter, every block at 100 / 50 / 33 %; charts take `"width": "full" | "half" | "third"`, the build widens incomplete rows, and `verify.py` checks the edges at 1440, 1280, 1024 and 390 px.
+# Run automated QA and capture screenshots
+python verify.py exemplos/cx/relatorio.html --out /tmp/captures
+```
 
-Quick start: `pip install -r requirements.txt && python -m playwright install chromium`, then `python exemplos/vendas/preparar.py` and `python verify.py exemplos/vendas/relatorio.html`. The folder is also a drop-in **AI agent skill** (`SKILL.md`, paths relative to the skill folder). Docs are mostly in Portuguese (pt-BR). Code comments and `SKILL.md` are in English. MIT licensed; bundled third-party licenses are listed in `NOTICE.md`.
+Pre-built HTML examples are already committed under `exemplos/` — open them directly in your browser.
+
+### With your own data
+
+1. **Profile**: `python profile.py data.xlsx --out profile.json --clean-out clean.parquet` (supports CSV, XLSX, JSON, Parquet, SQLite).
+2. **Spec**: Compute measures (rates as ratio of sums), pre-aggregate, and compute highlights in Python (copy `exemplos/vendas/preparar.py` or `exemplos/cx/preparar.py`).
+3. **Build**: `python build.py spec.json report.html --theme jornal` (or `rb.build(spec, "report.html", theme="jornal")`).
+4. **Verify**: `python verify.py report.html --pdf`.
+
+Importing modules by path (since `profile.py` shares a name with Python's stdlib `profile`):
+
+```python
+import importlib.util, os, sys
+
+KIT = os.environ.get("INTERACTIVE_REPORT_KIT", "/path/to/interactive-report")
+
+def kit(name):
+    s = importlib.util.spec_from_file_location("kit_" + name, os.path.join(KIT, f"{name}.py"))
+    m = importlib.util.module_from_spec(s)
+    sys.modules["kit_" + name] = m
+    s.loader.exec_module(m)
+    return m
+
+rp, rb, cx = kit("profile"), kit("build"), kit("cx")
+```
+
+---
+
+## Project Structure
+
+```text
+interactive-report/
+├── SKILL.md            # Agent Skill instructions & report spec reference
+├── profile.py          # Universal loader, conservative cleaner & data profiler
+├── build.py            # Spec validator, columnar encoder & single-file HTML builder
+├── verify.py           # Headless Chromium QA suite (layout, a11y, filters, screenshots, PDF)
+├── cx.py               # Survey analytics engine (CSAT/CES/NPS, CIs, z-tests, drivers, themes)
+├── tema.py             # Theme resolver & WCAG contrast checker
+├── template.html       # Self-contained report shell (d3 + Observable Plot + cross-filter engine)
+├── TEMA.md             # Full theme documentation
+├── temas/              # Built-in theme presets (neutro, corporativo, jornal, noturno, destaque)
+├── vendor/             # Pinned d3, Observable Plot & cached OFL fonts for offline builds
+├── exemplos/           # Worked sales & CX survey examples (fictional datasets)
+└── docs/               # Screenshots and visual demo assets
+```
+
+---
+
+## Limitations & Privacy
+
+- **Client-side data:** Everything embedded in the HTML goes to the browser. Aggregate or strip PII and secrets before building (in surveys, raw full comments are never embedded).
+- **Scale:** Browser cross-filtering stays snappy up to ~150k–200k fact rows. Above that, aggregate to a coarser grain (e.g., day → week).
+- **Static highlights:** Editorial highlights describe the default unfiltered view; KPIs and charts update dynamically.
+- **Comment themes & PII masking:** Offline themes assign one theme per comment based on distinctive terms, and PII masking is heuristic — always review quotes before sharing externally.
+- **Statistical assumptions:** Drivers measure association, not causation; significance tests assume independent responses.
+- **Google Fonts:** Require internet access only on the first build (cached under `vendor/fonts-cache/`).
+
+---
+
+## License
+
+Code licensed under [MIT](LICENSE) © 2026 João Paulo da Silva.  
+Bundled third-party assets — d3 & Observable Plot (ISC) and Geist, IBM Plex, Inter, JetBrains Mono, Montserrat, Newsreader, Space Grotesk (SIL OFL 1.1) — retain their respective licenses. See [NOTICE.md](NOTICE.md). All sample datasets in `exemplos/` are **fictional**.

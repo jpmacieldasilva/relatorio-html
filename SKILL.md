@@ -1,13 +1,13 @@
 ---
-name: relatorio-html
+name: interactive-report
 description: Turn any dataset (CSV, XLSX, JSON, Parquet, SQLite/SQL dump, Sheets export) into a beautiful, interactive, single-file HTML report with editorial data viz — a mandatory context step (goal, audience, key points → proposal of filters, language and sections approved before building), pandas profiling, computed insights, cross-filtering charts, data table, Playwright QA. Also CX survey reports (CSAT, CES, NPS) with confidence intervals, significance tests and comment themes. Fully themeable (fonts, colors, logo). Use when the user wants a report, dashboard, or "something better than Looker" from their data.
 ---
 
-# Relatório HTML — editorial, interactive reports from any dataset
+# Interactive Report — editorial, interactive HTML reports from any dataset
 
 The output is one self-contained `.html` file that reads like a well-edited data story (FT / The Economist / Our World in Data), not a dashboard. It has a headline that states the finding, computed highlights, KPIs with deltas and sparklines, sections that each answer one question, a searchable table and an honest methodology note. Everything cross-filters. The look comes from a **theme** (`TEMA.md`). The default "Neutro" theme is calm and neutral: off-white page, grey ink, one deep-blue primary, a colorblind-safe palette, KPI cards and subtle motion. Fonts, colors, logo, layout, shapes and motion are all configurable.
 
-Kit: every path below is relative to **this skill's folder** (the directory that contains this `SKILL.md`; call it `$KIT`, e.g. `~/.cursor/skills/relatorio-html` or wherever the repo was cloned). Scripts locate their own files via `Path(__file__)`, so they run from any working directory; `RELATORIO_KIT=/path/to/kit` overrides the location for the snippets below. Reuse the kit; never rewrite it per report.
+Kit: every path below is relative to **this skill's folder** (the directory that contains this `SKILL.md`; call it `$KIT`, e.g. `~/.cursor/skills/interactive-report`, `~/.claude/skills/interactive-report`, or wherever the repo was cloned). Scripts locate their own files via `Path(__file__)`, so they run from any working directory; `INTERACTIVE_REPORT_KIT=/path/to/kit` (or legacy `RELATORIO_KIT`) overrides the location for the snippets below. Reuse the kit; never rewrite it per report.
 
 | File | Role |
 |---|---|
@@ -24,7 +24,7 @@ Kit: every path below is relative to **this skill's folder** (the directory that
 Import the Python helpers by path (the name `profile` clashes with the stdlib):
 ```python
 import importlib.util, os, sys
-KIT = os.environ.get("RELATORIO_KIT", "/path/to/relatorio-html")   # this skill's folder
+KIT = os.environ.get("INTERACTIVE_REPORT_KIT") or os.environ.get("RELATORIO_KIT", "/path/to/interactive-report")
 def kit(name):
     s = importlib.util.spec_from_file_location("kit_" + name, os.path.join(KIT, f"{name}.py"))
     m = importlib.util.module_from_spec(s); sys.modules["kit_" + name] = m; s.loader.exec_module(m); return m

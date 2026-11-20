@@ -9,7 +9,7 @@ Usage (CLI)
     python build.py spec.json out.html --theme corporativo   # override spec["theme"] (preset, path or JSON)
 
 Usage (Python)
-    import os, sys; sys.path.insert(0, os.environ.get("RELATORIO_KIT", "caminho/para/relatorio-html"))
+    import os, sys; sys.path.insert(0, os.environ.get("INTERACTIVE_REPORT_KIT") or os.environ.get("RELATORIO_KIT", "path/to/interactive-report"))
     from build import build, encode_columnar
     spec["data"] = encode_columnar(df, date="data", dims=["regiao"], nums=["receita"])
     build(spec, "relatorio.html")

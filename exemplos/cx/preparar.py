@@ -20,7 +20,7 @@ from pathlib import Path
 import pandas as pd
 
 HERE = Path(__file__).resolve().parent
-KIT = Path(os.environ.get("RELATORIO_KIT") or HERE.parents[1])   # repo root (override with $RELATORIO_KIT)
+KIT = Path(os.environ.get("INTERACTIVE_REPORT_KIT") or os.environ.get("RELATORIO_KIT") or HERE.parents[1])   # repo root
 
 
 def _ensure(csv: Path):
@@ -235,7 +235,7 @@ spec = {
             f"Grupos com n < {prep.stats['minN']} são sempre exibidos e marcados como amostra pequena.",
             "Temas automáticos são aproximados: um comentário recebe um único tema; comentários muito curtos (\"ok\") ficam em \"Sem tema específico\".",
         ],
-        "colophon": "Dados **fictícios**, gerados por gerar_dados.py. Relatório gerado pelo kit relatorio-html.",
+        "colophon": "Dados **fictícios**, gerados por gerar_dados.py. Relatório gerado pela skill interactive-report.",
     },
     "checks": {"values": cx.expected_values(fact, prep.measures, prep.stats["level"], prep.stats["minN"])},
 }
